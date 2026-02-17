@@ -1,50 +1,60 @@
-# Welcome to your Expo app 👋
+# Мои смены
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**Мои смены** — мобильное приложение для личного учёта рабочих смен и заработка.
 
-## Get started
+Приложение предназначено для удобной фиксации смен, часов и доходов без сложных таблиц и лишних функций.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## Возможности
+- учёт рабочих смен;
+- расчёт заработка;
+- хранение истории смен;
+- вход по электронной почте с подтверждением кодом;
+- работа без рекламы и платных функций.
 
-2. Start the app
+---
 
-   ```bash
-   npx expo start
-   ```
+## Для кого приложение
+Приложение подходит для:
+- работников со сменным графиком;
+- подработок и почасовой оплаты;
+- личного учёта заработка без привязки к бухгалтерии.
 
-In the output, you'll find options to open the app in a
+---
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Важно
+- приложение предназначено **для личного использования**;
+- все данные вводятся пользователем самостоятельно;
+- расчёты носят **справочный характер**;
+- приложение **не является бухгалтерским, финансовым или налоговым сервисом**.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+---
 
-## Get a fresh project
+## Персональные данные
+Приложение обрабатывает минимальный набор данных:
+- адрес электронной почты (обязательно, используется для входа);
+- имя и номер телефона (по желанию пользователя).
 
-When you're ready, run:
+Данные не передаются третьим лицам.
 
-```bash
-npm run reset-project
-```
+Подробная информация:
+- [Политика конфиденциальности](https://archedartem.github.io/my-shifts-docs/#политика-конфиденциальности-приложения-мои-смены)
+- [Пользовательское соглашение](https://archedartem.github.io/my-shifts-docs/#пользовательское-соглашение-приложения-мои-смены)
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-## Learn more
+## Платформа
+- Android
 
-To learn more about developing your project with Expo, look at the following resources:
+---
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Статус проекта
+Проект находится в активной разработке.  
+Функциональность может изменяться и дополняться.
 
-## Join the community
+---
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Контакты
+Разработчик: **Игошин А.И.**  
+Email: **archedartem@gmail.com**
