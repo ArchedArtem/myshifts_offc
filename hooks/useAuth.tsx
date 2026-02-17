@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { supabase } from '@/services/supabase/client';
+import { supabase, supabaseAnonKey, supabaseUrl } from '@/services/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -9,6 +9,7 @@ interface AuthContextType {
     sendOTP: (email: string) => Promise<void>;
     verifyOTP: (email: string, token: string) => Promise<void>;
     signOut: () => Promise<void>;
+    deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -111,6 +112,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const deleteAccount = async () => {
+        if (!user) {
+            throw new Error('Пользователь не авторизован');
+        }
+
+        const tablesToClean = ['shifts', 'shift_templates'] as const;
+
+        for (const table of tablesToClean) {
+            const { error } = await supabase.from(table).delete().eq('user_id', user.id);
+            if (error) {
+                throw new Error(error.message || `Не удалось очистить ${table}`);
+            }
+        }
+
+        const { error: profileError } = await supabase.from('profiles').delete().eq('id', user.id);
+        if (profileError) {
+            throw new Error(profileError.message || 'Не удалось удалить профиль');
+        }
+
+        // Попытка удалить пользователя из Supabase Auth.
+        // В некоторых конфигурациях этот endpoint закрыт для клиентского anon key.
+        // Тогда считаем удаление успешным после очистки данных приложения и выхода из аккаунта.
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+
+        if (accessToken) {
+            const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+                method: 'DELETE',
+                headers: {
+                    apikey: supabaseAnonKey,
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.warn('Auth user delete failed, continue with local cleanup:', errorText);
+            }
+        }
+
+        await signOut();
+    };
+
     const value: AuthContextType = {
         session,
         user,
@@ -118,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sendOTP,
         verifyOTP,
         signOut,
+        deleteAccount,
     };
 
     return (

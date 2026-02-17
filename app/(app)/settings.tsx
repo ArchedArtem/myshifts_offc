@@ -110,7 +110,7 @@ export default function SettingsScreen() {
       <TextInput style={styles.input} value={form.default_hourly_rate} onChangeText={(v) => setForm((p) => ({ ...p, default_hourly_rate: v }))} placeholder="500" keyboardType="numeric" />
 
       <View style={styles.bonusCard}>
-        <Text style={styles.bonusTitle}>Система премий</Text>
+        <Text style={styles.bonusTitle}>Система премий (для работников ВиТ)</Text>
 
         <View style={styles.row}>
           <View style={styles.rowTextWrap}>
