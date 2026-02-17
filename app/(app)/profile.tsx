@@ -164,7 +164,7 @@ export default function ProfileScreen() {
                     <Text style={styles.menuItemText}>❓ Помощь</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuItemLast} onPress={() => { void openDocs(); }}>
-                    <Text style={styles.menuItemText}>📚 Документация</Text>
+                    <Text style={styles.menuItemText}>📚 Документы</Text>
                 </TouchableOpacity>
             </View>
 
