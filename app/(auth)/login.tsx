@@ -9,6 +9,7 @@ import {
     Platform,
     ActivityIndicator,
     StyleSheet,
+    Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,12 +22,37 @@ export default function LoginScreen() {
     const [step, setStep] = useState<'email' | 'otp'>('email');
     const [loading, setLoading] = useState(false);
     const [resendCountdown, setResendCountdown] = useState(0);
+    const [acceptedLegal, setAcceptedLegal] = useState(false);
     const router = useRouter();
     const { sendOTP, verifyOTP } = useAuth();
     useTheme();
     const styles = createStyles();
 
     const otpInputs = useRef<(TextInput | null)[]>([]);
+
+
+
+    const openTerms = async () => {
+        const url = 'https://archedartem.github.io/my-shifts-docs/#пользовательское-соглашение-приложения-мои-смены';
+        const supported = await Linking.canOpenURL(url);
+        if (!supported) {
+            Alert.alert('Ошибка', 'Не удалось открыть Пользовательское соглашение');
+            return;
+        }
+
+        await Linking.openURL(url);
+    };
+
+    const openPrivacy = async () => {
+        const url = 'https://archedartem.github.io/my-shifts-docs/#политика-конфиденциальности-приложения-мои-смены';
+        const supported = await Linking.canOpenURL(url);
+        if (!supported) {
+            Alert.alert('Ошибка', 'Не удалось открыть Политику конфиденциальности');
+            return;
+        }
+
+        await Linking.openURL(url);
+    };
 
     const handleSendOTP = async () => {
         const trimmedEmail = email.trim().toLowerCase();
@@ -82,7 +108,7 @@ export default function LoginScreen() {
         try {
             await verifyOTP(email.trim().toLowerCase(), code);
             router.replace('/(app)');
-        } catch (error: any) {
+        } catch {
             Alert.alert('Ошибка', 'Неверный код или время истекло');
             // Сброс OTP полей
             setOtp(['', '', '', '', '', '']);
@@ -151,10 +177,30 @@ export default function LoginScreen() {
                             autoCorrect={false}
                             editable={!loading}
                         />
+                        <View style={styles.legalRow}>
+                            <TouchableOpacity
+                                style={[styles.checkbox, acceptedLegal && styles.checkboxChecked]}
+                                onPress={() => setAcceptedLegal((prev) => !prev)}
+                                activeOpacity={0.8}
+                                disabled={loading}
+                            >
+                                {acceptedLegal ? <Text style={styles.checkboxMark}>✓</Text> : null}
+                            </TouchableOpacity>
+                            <Text style={styles.legalText}>
+                                Я принимаю{' '}
+                                <Text style={styles.legalLink} onPress={() => { void openTerms(); }}>
+                                    Пользовательское соглашение
+                                </Text>{' '}
+                                и{' '}
+                                <Text style={styles.legalLink} onPress={() => { void openPrivacy(); }}>
+                                    Политику конфиденциальности
+                                </Text>
+                            </Text>
+                        </View>
                         <TouchableOpacity
-                            style={[styles.button, loading && styles.buttonDisabled]}
+                            style={[styles.button, (loading || !acceptedLegal) && styles.buttonDisabled]}
                             onPress={handleSendOTP}
-                            disabled={loading || !email.includes('@')}
+                            disabled={loading || !email.includes('@') || !acceptedLegal}
                         >
                             {loading ? (
                                 <ActivityIndicator color={Colors.onPrimary} />
@@ -319,6 +365,43 @@ const createStyles = () => StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
+    legalRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 16,
+        gap: 10,
+    },
+    checkbox: {
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: Colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 1,
+        backgroundColor: Colors.white,
+    },
+    checkboxChecked: {
+        borderColor: Colors.primary,
+        backgroundColor: Colors.lightPrimary,
+    },
+    checkboxMark: {
+        color: Colors.primary,
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    legalText: {
+        flex: 1,
+        fontSize: 13,
+        lineHeight: 18,
+        color: Colors.darkGray,
+    },
+    legalLink: {
+        color: Colors.primary,
+        textDecorationLine: 'underline',
+    },
+
     footer: {
         alignItems: 'center',
         marginTop: 8,
