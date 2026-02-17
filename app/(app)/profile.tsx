@@ -7,6 +7,7 @@ import {
     ScrollView,
     StyleSheet,
     Switch,
+    Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,7 +28,7 @@ export default function ProfileScreen() {
     });
 
     const router = useRouter();
-    const { user, signOut } = useAuth();
+    const { user, signOut, deleteAccount } = useAuth();
     const { theme, toggleTheme } = useTheme();
     const styles = createStyles();
 
@@ -69,6 +70,43 @@ export default function ProfileScreen() {
                 },
             },
         ]);
+    };
+
+    const openDocs = async () => {
+        const url = 'https://archedartem.github.io/my-shifts-docs/';
+        const supported = await Linking.canOpenURL(url);
+
+        if (!supported) {
+            Alert.alert('Ошибка', 'Не удалось открыть документацию');
+            return;
+        }
+
+        await Linking.openURL(url);
+    };
+
+    const handleDeleteAccount = () => {
+        Alert.alert(
+            'Удалить аккаунт',
+            'Это действие удалит профиль, смены и шаблоны. Отменить нельзя. Продолжить?',
+            [
+                { text: 'Отмена', style: 'cancel' },
+                {
+                    text: 'Удалить',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setLoading(true);
+                        try {
+                            await deleteAccount();
+                            router.replace('/(auth)/login');
+                        } catch (error: any) {
+                            Alert.alert('Ошибка', error.message || 'Не удалось удалить аккаунт');
+                        } finally {
+                            setLoading(false);
+                        }
+                    },
+                },
+            ]
+        );
     };
 
     const hasName = !!profile.full_name.trim();
@@ -122,8 +160,11 @@ export default function ProfileScreen() {
                 <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./widgets')}>
                     <Text style={styles.menuItemText}>🧩 Виджеты</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItemLast} onPress={() => router.push('./help')}>
+                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./help')}>
                     <Text style={styles.menuItemText}>❓ Помощь</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItemLast} onPress={() => { void openDocs(); }}>
+                    <Text style={styles.menuItemText}>📚 Документация</Text>
                 </TouchableOpacity>
             </View>
 
@@ -131,6 +172,9 @@ export default function ProfileScreen() {
                 <Text style={styles.dangerTitle}>Опасная зона</Text>
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} disabled={loading}>
                     <Text style={styles.logoutButtonText}>{loading ? 'Выход...' : 'Выйти из аккаунта'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount} disabled={loading}>
+                    <Text style={styles.deleteButtonText}>{loading ? 'Удаление...' : 'Удалить аккаунт'}</Text>
                 </TouchableOpacity>
             </View>
         </ScrollView>
@@ -233,5 +277,19 @@ const createStyles = () => StyleSheet.create({
         fontSize: 16,
         fontWeight: '500',
         color: Colors.darkGray,
+    },
+    deleteButton: {
+        marginTop: 12,
+        backgroundColor: Colors.lightError,
+        borderWidth: 1,
+        borderColor: Colors.error,
+        padding: 16,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    deleteButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: Colors.error,
     },
 });
