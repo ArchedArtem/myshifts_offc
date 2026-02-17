@@ -1,0 +1,86 @@
+import { useEffect, useState } from 'react';
+import { Slot, SplashScreen } from 'expo-router';
+import { AuthProvider } from '@/hooks/useAuth';
+import { ActivityIndicator, Platform, StatusBar as NativeStatusBar, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import Colors from '@/constants/Colors';
+import { initializeNotifications } from '@/services/notifications';
+import { ThemeProvider, useTheme } from '@/hooks/useTheme';
+import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
+
+SplashScreen.preventAutoHideAsync();
+
+function LayoutInitializer() {
+    const [appIsReady, setAppIsReady] = useState(false);
+    const { initialized, theme } = useTheme();
+
+    useEffect(() => {
+        if (!initialized) return;
+
+        initializeNotifications();
+
+        // Даем время для инициализации
+        setTimeout(() => {
+            setAppIsReady(true);
+            SplashScreen.hideAsync();
+        }, 500);
+    }, [initialized]);
+
+    if (!appIsReady || !initialized) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+        );
+    }
+
+    return <Slot key={theme} />;
+}
+
+function ThemedRootContainer() {
+    const { theme } = useTheme();
+
+    useEffect(() => {
+        SystemUI.setBackgroundColorAsync(Colors.background).catch(() => {
+            // ignore platform-level errors
+        });
+
+        if (Platform.OS === 'android') {
+            NativeStatusBar.setTranslucent(false);
+            NativeStatusBar.setBackgroundColor(Colors.background, true);
+            NativeStatusBar.setBarStyle(theme === 'dark' ? 'light-content' : 'dark-content', true);
+        }
+    }, [theme]);
+
+    return (
+        <>
+            <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={Colors.background} translucent={false} />
+            <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={['top']}>
+                <AuthProvider>
+                    <LayoutInitializer />
+                </AuthProvider>
+            </SafeAreaView>
+        </>
+    );
+}
+
+function ThemedProviders() {
+    useTheme();
+
+    return (
+        <SafeAreaProvider style={{ flex: 1, backgroundColor: Colors.background }}>
+            <View style={{ flex: 1, backgroundColor: Colors.background }}>
+                <ThemedRootContainer />
+            </View>
+        </SafeAreaProvider>
+    );
+}
+
+export default function RootLayout() {
+    return (
+        <ThemeProvider>
+            <ThemedProviders />
+        </ThemeProvider>
+    );
+}
