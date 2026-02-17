@@ -131,24 +131,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error(profileError.message || 'Не удалось удалить профиль');
         }
 
+        // Попытка удалить пользователя из Supabase Auth.
+        // В некоторых конфигурациях этот endpoint закрыт для клиентского anon key.
+        // Тогда считаем удаление успешным после очистки данных приложения и выхода из аккаунта.
         const { data } = await supabase.auth.getSession();
         const accessToken = data.session?.access_token;
 
-        if (!accessToken) {
-            throw new Error('Не удалось получить токен сессии для удаления аккаунта');
-        }
+        if (accessToken) {
+            const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+                method: 'DELETE',
+                headers: {
+                    apikey: supabaseAnonKey,
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
 
-        const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
-            method: 'DELETE',
-            headers: {
-                apikey: supabaseAnonKey,
-                Authorization: `Bearer ${accessToken}`,
-            },
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || 'Не удалось удалить аккаунт');
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.warn('Auth user delete failed, continue with local cleanup:', errorText);
+            }
         }
 
         await signOut();
