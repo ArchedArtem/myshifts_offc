@@ -512,52 +512,52 @@ export default function StatisticsScreen() {
                         </Text>
                     </View>
 
-                    <View style={styles.bonusSection}>
-                        <Text style={styles.bonusSectionTitle}>Премии</Text>
-                        <Text style={styles.bonusRow}>
-                            🔹 Надежность (50ч/мес, +15%): {statistics.reliabilityBonus.toFixed(2)} ₽
-                        </Text>
-                        <Text style={styles.bonusRow}>
-                            🔹 Любые временные возможности (+17 000 ₽/нед): {statistics.anyAvailabilityBonus.toFixed(2)} ₽
-                        </Text>
-                        <Text style={styles.bonusRow}>
-                            🔹 Полные временные возможности (+10 000 ₽/нед): {statistics.fullTimeAvailabilityBonus.toFixed(2)} ₽
-                        </Text>
-                        <Text style={styles.bonusInfo}>
-                            {bonusSettings.bonusSystemEnabled
-                                ? 'Система премий включена'
-                                : 'Система премий выключена в настройках'}
-                        </Text>
+                    {bonusSettings.bonusSystemEnabled && (
+                        <>
+                            <View style={styles.bonusSection}>
+                                <Text style={styles.bonusSectionTitle}>Премии</Text>
+                                <Text style={styles.bonusRow}>
+                                    🔹 Надежность (50ч/мес, +15%): {statistics.reliabilityBonus.toFixed(2)} ₽
+                                </Text>
+                                <Text style={styles.bonusRow}>
+                                    🔹 Любые временные возможности (+17 000 ₽/нед): {statistics.anyAvailabilityBonus.toFixed(2)} ₽
+                                </Text>
+                                <Text style={styles.bonusRow}>
+                                    🔹 Полные временные возможности (+10 000 ₽/нед): {statistics.fullTimeAvailabilityBonus.toFixed(2)} ₽
+                                </Text>
+                                <Text style={styles.bonusInfo}>Система премий включена</Text>
 
-                        <View style={styles.totalCard}>
-                            <Text style={styles.totalLabel}>Итог с премиями</Text>
-                            <Text style={styles.totalValue}>{statistics.totalWithBonuses.toFixed(2)} ₽</Text>
-                        </View>
-                    </View>
+                                <View style={styles.totalCard}>
+                                    <Text style={styles.totalLabel}>Итог с премиями</Text>
+                                    <Text style={styles.totalValue}>{statistics.totalWithBonuses.toFixed(2)} ₽</Text>
+                                </View>
+                            </View>
 
-                    <View style={styles.payrollCard}>
-                        <Text style={styles.payrollTitle}>Аванс и зарплата</Text>
-                        {payrollSummary ? (
-                            <>
-                                <Text style={styles.payrollLine}>
-                                    Аванс: {payrollSummary.advanceAmount.toFixed(2)} ₽ · {format(payrollSummary.advanceDate, 'dd.MM.yyyy')}
-                                </Text>
-                                <Text style={styles.payrollSubLine}>
-                                    80% от дохода за 1–15 число ({payrollSummary.firstHalfEarnings.toFixed(2)} ₽)
-                                </Text>
+                            <View style={styles.payrollCard}>
+                                <Text style={styles.payrollTitle}>Аванс и зарплата</Text>
+                                {payrollSummary ? (
+                                    <>
+                                        <Text style={styles.payrollLine}>
+                                            Аванс: {payrollSummary.advanceAmount.toFixed(2)} ₽ · {format(payrollSummary.advanceDate, 'dd.MM.yyyy')}
+                                        </Text>
+                                        <Text style={styles.payrollSubLine}>
+                                            80% от дохода за 1–15 число ({payrollSummary.firstHalfEarnings.toFixed(2)} ₽)
+                                        </Text>
 
-                                <Text style={[styles.payrollLine, { marginTop: 10 }]}>
-                                    Зарплата: {payrollSummary.salaryAmount.toFixed(2)} ₽ · {format(payrollSummary.salaryDate, 'dd.MM.yyyy')}
-                                </Text>
-                                <Text style={styles.payrollSubLine}>
-                                    20% за 1–15 ({(payrollSummary.firstHalfEarnings * 0.2).toFixed(2)} ₽) + доход 16–конец ({payrollSummary.secondHalfEarnings.toFixed(2)} ₽) + премии ({payrollSummary.monthlyBonuses.toFixed(2)} ₽)
-                                </Text>
-                                <Text style={styles.payrollHint}>Суммы уже рассчитаны с учетом НДФЛ 13% и двойной ставки в праздники РФ.</Text>
-                            </>
-                        ) : (
-                            <Text style={styles.payrollSubLine}>Данные появятся при выборе периода «Месяц».</Text>
-                        )}
-                    </View>
+                                        <Text style={[styles.payrollLine, { marginTop: 10 }]}>
+                                            Зарплата: {payrollSummary.salaryAmount.toFixed(2)} ₽ · {format(payrollSummary.salaryDate, 'dd.MM.yyyy')}
+                                        </Text>
+                                        <Text style={styles.payrollSubLine}>
+                                            20% за 1–15 ({(payrollSummary.firstHalfEarnings * 0.2).toFixed(2)} ₽) + доход 16–конец ({payrollSummary.secondHalfEarnings.toFixed(2)} ₽) + премии ({payrollSummary.monthlyBonuses.toFixed(2)} ₽)
+                                        </Text>
+                                        <Text style={styles.payrollHint}>Суммы уже рассчитаны с учетом НДФЛ 13% и двойной ставки в праздники РФ.</Text>
+                                    </>
+                                ) : (
+                                    <Text style={styles.payrollSubLine}>Данные появятся при выборе периода «Месяц».</Text>
+                                )}
+                            </View>
+                        </>
+                    )}
                 </>
             )}
         </ScrollView>
