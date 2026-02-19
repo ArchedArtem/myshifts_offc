@@ -102,7 +102,11 @@ const NDFL_RATE = 0.13;
 const TAKE_HOME_MULTIPLIER = 1 - NDFL_RATE;
 const HOLIDAY_SHIFT_BONUS = 50;
 
-const getShiftEarnings = (shift: Shift, holidayDateSet: Set<string>) => {
+const getShiftEarnings = (
+    shift: Shift,
+    holidayDateSet: Set<string>,
+    bonusSystemEnabled: boolean,
+) => {
     const gross = calculateEarnings(
         normalizeTime(shift.start_time),
         normalizeTime(shift.end_time),
@@ -112,7 +116,7 @@ const getShiftEarnings = (shift: Shift, holidayDateSet: Set<string>) => {
     );
 
     const grossWithHoliday = holidayDateSet.has(shift.date)
-        ? (gross * 2) + HOLIDAY_SHIFT_BONUS
+        ? (gross * 2) + (bonusSystemEnabled ? HOLIDAY_SHIFT_BONUS : 0)
         : gross;
     return grossWithHoliday * TAKE_HOME_MULTIPLIER;
 };
@@ -141,7 +145,10 @@ export default function StatisticsScreen() {
         withBonuses: boolean,
         holidayDateSet: Set<string>,
     ): CalculatedStatistics => {
-        const baseEarnings = shifts.reduce((sum, shift) => sum + getShiftEarnings(shift, holidayDateSet), 0);
+        const baseEarnings = shifts.reduce(
+            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled),
+            0,
+        );
         const totalHours = shifts.reduce((sum, shift) => sum + getShiftHours(shift), 0);
         const shiftCount = shifts.length;
         const averagePerShift = shiftCount > 0 ? baseEarnings / shiftCount : 0;
@@ -154,7 +161,7 @@ export default function StatisticsScreen() {
 
         shifts.forEach((shift) => {
             const day = parseISO(shift.date).getDay();
-            const shiftEarnings = getShiftEarnings(shift, holidayDateSet);
+            const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled);
             const record = weekdayAggregate.get(day) || { earnings: 0, count: 0 };
             record.earnings += shiftEarnings;
             record.count += 1;
@@ -188,7 +195,7 @@ export default function StatisticsScreen() {
                 const weekKey = format(startOfWeek(shiftDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
                 const shiftHours = getShiftHours(shift);
-                const shiftEarnings = getShiftEarnings(shift, holidayDateSet);
+                const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled);
 
                 const monthRecord = monthlyMap.get(monthKey) || { earnings: 0, hours: 0 };
                 monthRecord.earnings += shiftEarnings;
@@ -300,10 +307,13 @@ export default function StatisticsScreen() {
                 const monthlyBonuses = Math.max(0, currentStats.totalWithBonuses - currentStats.baseEarnings);
                 const firstHalfEarnings = currentShifts
                     .filter((shift) => parseISO(shift.date).getDate() <= 15)
-                    .reduce((sum, shift) => sum + getShiftEarnings(shift, holidayDateSet), 0);
+                    .reduce(
+                        (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled),
+                        0,
+                    );
                 const secondHalfEarnings = Math.max(0, currentStats.baseEarnings - firstHalfEarnings);
-                const advanceAmount = firstHalfEarnings * 0.8;
-                const salaryAmount = (firstHalfEarnings * 0.2) + secondHalfEarnings + monthlyBonuses;
+                const advanceAmount = firstHalfEarnings;
+                const salaryAmount = secondHalfEarnings + monthlyBonuses;
 
                 setMonthComparison({
                     current: {
@@ -541,14 +551,14 @@ export default function StatisticsScreen() {
                                             Аванс: {payrollSummary.advanceAmount.toFixed(2)} ₽ · {format(payrollSummary.advanceDate, 'dd.MM.yyyy')}
                                         </Text>
                                         <Text style={styles.payrollSubLine}>
-                                            80% от дохода за 1–15 число ({payrollSummary.firstHalfEarnings.toFixed(2)} ₽)
+                                            100% дохода за 1–15 число ({payrollSummary.firstHalfEarnings.toFixed(2)} ₽)
                                         </Text>
 
                                         <Text style={[styles.payrollLine, { marginTop: 10 }]}>
                                             Зарплата: {payrollSummary.salaryAmount.toFixed(2)} ₽ · {format(payrollSummary.salaryDate, 'dd.MM.yyyy')}
                                         </Text>
                                         <Text style={styles.payrollSubLine}>
-                                            20% за 1–15 ({(payrollSummary.firstHalfEarnings * 0.2).toFixed(2)} ₽) + доход 16–конец ({payrollSummary.secondHalfEarnings.toFixed(2)} ₽) + премии ({payrollSummary.monthlyBonuses.toFixed(2)} ₽)
+                                            Доход 16–конец ({payrollSummary.secondHalfEarnings.toFixed(2)} ₽) + премии ({payrollSummary.monthlyBonuses.toFixed(2)} ₽)
                                         </Text>
                                         <Text style={styles.payrollHint}>Суммы уже рассчитаны с учетом НДФЛ 13% и двойной ставки в праздники РФ.</Text>
                                     </>
