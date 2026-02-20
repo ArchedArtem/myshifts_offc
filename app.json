@@ -44,7 +44,8 @@
           "widgets": [
             {
               "name": "NextShiftWidget",
-              "label": "Мои смены — Ближайшая смена",
+              "label": "MyShifts — Ближайшая смена",
+
               "description": "Показывает ближайшую запланированную смену",
               "minWidth": "180dp",
               "minHeight": "90dp",
