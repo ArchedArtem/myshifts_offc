@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/services/supabase/client';
 import { calculateDuration, calculateEarnings } from '@/utils/calculations';
 import { useTheme } from '@/hooks/useTheme';
+import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 
 type ShiftRow = {
   date: string;
@@ -81,8 +82,7 @@ export default function WidgetsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadData(); setRefreshing(false); }} tintColor={Colors.primary} />}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Виджеты (бета)</Text>
-        <Text style={styles.subtitle}>Превью данных для будущих iOS/Android виджетов.</Text>
+        <Text style={styles.title}>Виджеты</Text>
       </View>
 
       <View style={styles.card}>
@@ -102,8 +102,8 @@ export default function WidgetsScreen() {
 
 
 
-      <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
-        <Text style={styles.refreshText}>Обновить превью</Text>
+      <TouchableOpacity style={styles.refreshButton} onPress={async () => { await loadData(); if (user?.id) { await syncNextShiftWidgetForUser(user.id); } }}>
+        <Text style={styles.refreshText}>Обновить виджет</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -113,7 +113,6 @@ const createStyles = () => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { padding: 20, backgroundColor: Colors.primary },
   title: { fontSize: 24, color: Colors.onPrimary, fontWeight: '700' },
-  subtitle: { marginTop: 6, color: Colors.onPrimary, opacity: 0.9 },
   card: { backgroundColor: Colors.white, marginHorizontal: 16, marginTop: 12, borderRadius: 12, padding: 16 },
   cardTitle: { color: Colors.gray, marginBottom: 6 },
   cardValue: { fontSize: 24, fontWeight: '700', color: Colors.primary },

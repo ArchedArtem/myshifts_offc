@@ -75,6 +75,7 @@ export default function AppLayout() {
             <Tabs.Screen name="holidays" options={{ href: null }} />
             <Tabs.Screen name="help" options={{ href: null }} />
             <Tabs.Screen name="widgets" options={{ href: null }} />
+            <Tabs.Screen name="documents" options={{ href: null }} />
         </Tabs>
     );
 }
