@@ -8,6 +8,7 @@ import { initializeNotifications } from '@/services/notifications';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
+import { registerNextShiftWidgetTask } from '@/services/androidWidget';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -16,6 +17,7 @@ function LayoutInitializer() {
     const { initialized, theme } = useTheme();
 
     useEffect(() => {
+        registerNextShiftWidgetTask();
         if (!initialized) return;
 
         initializeNotifications();

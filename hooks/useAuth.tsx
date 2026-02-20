@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { supabase, supabaseAnonKey, supabaseUrl } from '@/services/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
+import { clearNextShiftWidgetState, syncNextShiftWidgetForUser } from '@/services/androidWidget';
 
 interface AuthContextType {
     session: Session | null;
@@ -66,6 +67,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return () => subscription.unsubscribe();
     }, []);
 
+
+    useEffect(() => {
+        if (user?.id) {
+            syncNextShiftWidgetForUser(user.id);
+            return;
+        }
+
+        clearNextShiftWidgetState();
+    }, [user?.id]);
     const sendOTP = async (email: string): Promise<void> => {
         const normalizedEmail = email.trim().toLowerCase();
 
