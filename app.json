@@ -44,7 +44,11 @@
           "widgets": [
             {
               "name": "NextShiftWidget",
+<<<<<<< codex/review-app-security-and-api-questions-xixas4
               "label": "Мои смены — Ближайшая смена",
+=======
+              "label": "MyShifts — Ближайшая смена",
+>>>>>>> main
               "description": "Показывает ближайшую запланированную смену",
               "minWidth": "180dp",
               "minHeight": "90dp",
