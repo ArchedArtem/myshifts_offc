@@ -20,6 +20,7 @@ import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
 import { calculateEarnings } from '@/utils/calculations';
 import { useTheme } from '@/hooks/useTheme';
+import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import { loadHolidayDateSet } from '@/services/holidays';
 
 
@@ -170,6 +171,9 @@ export default function CalendarScreen() {
                         if (error) throw error;
 
                         setSelectedShift(null);
+                        if (user?.id) {
+                            await syncNextShiftWidgetForUser(user.id);
+                        }
                         await fetchShifts();
                     } catch (error: any) {
                         Alert.alert('Ошибка', error.message || 'Не удалось удалить смену');
