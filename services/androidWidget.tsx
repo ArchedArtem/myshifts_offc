@@ -106,7 +106,7 @@ export async function syncNextShiftWidgetForUser(userId: string): Promise<void> 
   const today = format(new Date(), 'yyyy-MM-dd');
   const { data, error } = await supabase
     .from('shifts')
-    .select('date, start_time, end_time')
+    .select('date, start_time')
     .eq('user_id', userId)
     .gte('date', today)
     .order('date', { ascending: true })
@@ -118,12 +118,12 @@ export async function syncNextShiftWidgetForUser(userId: string): Promise<void> 
     return;
   }
 
-  const nearest = (data || [])[0] as { date: string; start_time: string; end_time: string } | undefined;
+  const nearest = (data || [])[0] as { date: string; start_time: string } | undefined;
 
   const state: NextShiftWidgetState = nearest
     ? {
         headline: 'Ближайшая смена',
-        value: `${format(new Date(`${nearest.date}T00:00:00`), 'dd.MM')} с ${normalizeTime(nearest.start_time)} до ${normalizeTime(nearest.end_time)}`,
+        value: `${format(new Date(`${nearest.date}T00:00:00`), 'dd.MM')} в ${normalizeTime(nearest.start_time)}`,
         updatedAt: format(new Date(), 'dd.MM HH:mm'),
       }
     : {

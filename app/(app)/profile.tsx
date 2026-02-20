@@ -7,7 +7,6 @@ import {
     ScrollView,
     StyleSheet,
     Switch,
-    Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
@@ -70,18 +69,6 @@ export default function ProfileScreen() {
                 },
             },
         ]);
-    };
-
-    const openDocs = async () => {
-        const url = 'https://archedartem.github.io/my-shifts-docs/';
-        const supported = await Linking.canOpenURL(url);
-
-        if (!supported) {
-            Alert.alert('Ошибка', 'Не удалось открыть документацию');
-            return;
-        }
-
-        await Linking.openURL(url);
     };
 
     const handleDeleteAccount = () => {
@@ -163,7 +150,7 @@ export default function ProfileScreen() {
                 <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./help')}>
                     <Text style={styles.menuItemText}>❓ Помощь</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItemLast} onPress={() => { void openDocs(); }}>
+                <TouchableOpacity style={styles.menuItemLast} onPress={() => router.push('./documents')}>
                     <Text style={styles.menuItemText}>📚 Документы</Text>
                 </TouchableOpacity>
             </View>

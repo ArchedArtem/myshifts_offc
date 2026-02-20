@@ -33,7 +33,7 @@ export default function LoginScreen() {
 
 
     const openTerms = async () => {
-        const url = 'https://archedartem.github.io/my-shifts-docs/#пользовательское-соглашение-приложения-мои-смены';
+        const url = 'https://myshifts.ru/terms.html';
         const supported = await Linking.canOpenURL(url);
         if (!supported) {
             Alert.alert('Ошибка', 'Не удалось открыть Пользовательское соглашение');
@@ -44,7 +44,7 @@ export default function LoginScreen() {
     };
 
     const openPrivacy = async () => {
-        const url = 'https://archedartem.github.io/my-shifts-docs/#политика-конфиденциальности-приложения-мои-смены';
+        const url = 'https://myshifts.ru/privacy.html';
         const supported = await Linking.canOpenURL(url);
         if (!supported) {
             Alert.alert('Ошибка', 'Не удалось открыть Политику конфиденциальности');
