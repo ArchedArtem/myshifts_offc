@@ -169,7 +169,6 @@ export default function ProfileScreen() {
             </View>
 
             <View style={styles.card}>
-                <Text style={styles.dangerTitle}>Опасная зона</Text>
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} disabled={loading}>
                     <Text style={styles.logoutButtonText}>{loading ? 'Выход...' : 'Выйти из аккаунта'}</Text>
                 </TouchableOpacity>
