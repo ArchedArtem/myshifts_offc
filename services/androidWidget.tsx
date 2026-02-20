@@ -38,17 +38,17 @@ function buildWidget(state: NextShiftWidgetState): WidgetRepresentation {
         height: 'match_parent',
         width: 'match_parent',
         padding: 16,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#E6F0FF',
         borderRadius: 16,
         justifyContent: 'center',
       }}
     >
-      <TextWidget text="MyShifts" style={{ color: '#0B5ED7', fontSize: 14, fontWeight: '700' }} />
-      <TextWidget text={state.headline} style={{ marginTop: 8, color: '#6B7280', fontSize: 13 }} />
-      <TextWidget text={state.value} style={{ marginTop: 4, color: '#111827', fontSize: 22, fontWeight: '700' }} maxLines={2} />
+      <TextWidget text="Мои смены" style={{ color: '#0B5ED7', fontSize: 14, fontWeight: '700' }} />
+      <TextWidget text={state.headline} style={{ marginTop: 8, color: '#3F4A5A', fontSize: 13 }} />
+      <TextWidget text={state.value} style={{ marginTop: 4, color: '#0F172A', fontSize: 22, fontWeight: '700' }} maxLines={2} />
       <TextWidget
         text={`Обновлено: ${state.updatedAt}`}
-        style={{ marginTop: 8, color: '#6B7280', fontSize: 12 }}
+        style={{ marginTop: 8, color: '#3F4A5A', fontSize: 12 }}
         truncate="END"
         maxLines={1}
       />
