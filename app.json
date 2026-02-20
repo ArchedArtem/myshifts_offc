@@ -37,6 +37,24 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "NextShiftWidget",
+              "label": "MyShifts — Ближайшая смена",
+              "description": "Показывает ближайшую запланированную смену",
+              "minWidth": "180dp",
+              "minHeight": "90dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical"
+            }
+          ]
+        }
       ]
     ],
     "experiments": {

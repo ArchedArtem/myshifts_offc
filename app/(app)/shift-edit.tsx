@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { calculateEarnings } from '@/utils/calculations';
 import { ShiftTemplate, getAllShiftTemplates } from '@/services/shiftTemplates';
 import { loadHolidayDateSet } from '@/services/holidays';
+import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import { defaultBonusSettings, loadBonusSettings } from '@/services/bonusSettings';
 
 type ShiftEntity = {
@@ -216,6 +217,7 @@ export default function ShiftEditScreen() {
                 Alert.alert('Успешно', 'Смена добавлена');
             }
 
+            await syncNextShiftWidgetForUser(user.id);
             router.back();
         } catch (error: any) {
             Alert.alert('Ошибка', error.message);
@@ -243,6 +245,7 @@ export default function ShiftEditScreen() {
                                 .eq('id', shiftId)
                                 .eq('user_id', user.id);
                             if (error) throw error;
+                            await syncNextShiftWidgetForUser(user.id);
                             router.back();
                         } catch (error: any) {
                             Alert.alert('Ошибка', error.message);
