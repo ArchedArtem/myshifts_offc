@@ -147,7 +147,7 @@ export default function StatisticsScreen() {
         includeNdfl: boolean,
     ): CalculatedStatistics => {
         const baseEarnings = shifts.reduce(
-            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, taxSettings.includeNdfl),
+            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl),
             0,
         );
         const totalHours = shifts.reduce((sum, shift) => sum + getShiftHours(shift), 0);
@@ -162,7 +162,7 @@ export default function StatisticsScreen() {
 
         shifts.forEach((shift) => {
             const day = parseISO(shift.date).getDay();
-            const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, taxSettings.includeNdfl);
+            const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl);
             const record = weekdayAggregate.get(day) || { earnings: 0, count: 0 };
             record.earnings += shiftEarnings;
             record.count += 1;
@@ -196,7 +196,7 @@ export default function StatisticsScreen() {
                 const weekKey = format(startOfWeek(shiftDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
                 const shiftHours = getShiftHours(shift);
-                const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, taxSettings.includeNdfl);
+                const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl);
 
                 const monthRecord = monthlyMap.get(monthKey) || { earnings: 0, hours: 0 };
                 monthRecord.earnings += shiftEarnings;
@@ -310,7 +310,7 @@ export default function StatisticsScreen() {
                 const firstHalfEarnings = currentShifts
                     .filter((shift) => parseISO(shift.date).getDate() <= 15)
                     .reduce(
-                        (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, taxSettings.includeNdfl),
+                        (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl),
                         0,
                     );
                 const secondHalfEarnings = Math.max(0, currentStats.baseEarnings - firstHalfEarnings);
