@@ -6,13 +6,25 @@ import {
     Alert,
     ScrollView,
     StyleSheet,
-    Switch,
+    Switch, Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/services/supabase/client';
 import Colors from '@/constants/Colors';
 import { useTheme } from '@/hooks/useTheme';
+
+const SUPPORT_URL = 'https://myshifts.ru/support.html';
+
+async function openExternalUrl(url: string, errorTitle: string): Promise<void> {
+    const supported = await Linking.canOpenURL(url);
+    if (!supported) {
+        Alert.alert('Ошибка', errorTitle);
+        return;
+    }
+
+    await Linking.openURL(url);
+}
 
 interface ProfileHeader {
     email: string;
@@ -162,7 +174,10 @@ export default function ProfileScreen() {
                 <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount} disabled={loading}>
                     <Text style={styles.deleteButtonText}>{loading ? 'Удаление...' : 'Удалить аккаунт'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.supportButton} activeOpacity={0.85}>
+                <TouchableOpacity style={styles.supportButton} activeOpacity={0.85}
+                                  onPress={() => {
+                                      void openExternalUrl(SUPPORT_URL, 'Не удалось открыть ссылку :(');
+                                  }}>
                     <Text style={styles.supportButtonText}>Поддержать разработчика ❤️</Text>
                 </TouchableOpacity>
             </View>
