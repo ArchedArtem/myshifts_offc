@@ -15,11 +15,12 @@ import { supabase } from '@/services/supabase/client';
 import Colors from '@/constants/Colors';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
-import { calculateEarnings } from '@/utils/calculations';
+import { applyNdfl, calculateEarnings } from '@/utils/calculations';
 import { ShiftTemplate, getAllShiftTemplates } from '@/services/shiftTemplates';
 import { loadHolidayDateSet } from '@/services/holidays';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import { defaultBonusSettings, loadBonusSettings } from '@/services/bonusSettings';
+import { defaultTaxSettings, loadTaxSettings } from '@/services/taxSettings';
 
 type ShiftEntity = {
     id: string;
@@ -69,6 +70,7 @@ export default function ShiftEditScreen() {
     const [shiftTemplates, setShiftTemplates] = useState<ShiftTemplate[]>([]);
     const [holidayDateSet, setHolidayDateSet] = useState<Set<string>>(new Set());
     const [bonusSystemEnabled, setBonusSystemEnabled] = useState(defaultBonusSettings.bonusSystemEnabled);
+    const [includeNdfl, setIncludeNdfl] = useState(defaultTaxSettings.includeNdfl);
     const router = useRouter();
     const { user } = useAuth();
 
@@ -134,16 +136,18 @@ export default function ShiftEditScreen() {
             let mounted = true;
 
             const loadTemplates = async () => {
-                const [templates, holidays, bonusSettings] = await Promise.all([
+                const [templates, holidays, bonusSettings, taxSettings] = await Promise.all([
                     getAllShiftTemplates(user?.id),
                     loadHolidayDateSet(),
                     loadBonusSettings(),
+                    loadTaxSettings(),
                 ]);
 
                 if (mounted) {
                     setShiftTemplates(templates);
                     setHolidayDateSet(holidays);
                     setBonusSystemEnabled(bonusSettings.bonusSystemEnabled);
+                    setIncludeNdfl(taxSettings.includeNdfl);
                 }
             };
 
@@ -155,7 +159,7 @@ export default function ShiftEditScreen() {
         }, [user])
     );
 
-    const totalEarnings = useMemo(() => {
+    const grossEarnings = useMemo(() => {
         if (!isValidTime(formData.startTime) || !isValidTime(formData.endTime)) {
             return 0;
         }
@@ -168,9 +172,9 @@ export default function ShiftEditScreen() {
 
     const isHolidayShift = holidayDateSet.has(formData.date);
     const holidayPremium = isHolidayShift
-        ? totalEarnings + (bonusSystemEnabled ? HOLIDAY_SHIFT_BONUS : 0)
+        ? grossEarnings + (bonusSystemEnabled ? HOLIDAY_SHIFT_BONUS : 0)
         : 0;
-    const totalWithHoliday = totalEarnings + holidayPremium;
+    const totalWithHoliday = applyNdfl(grossEarnings + holidayPremium, includeNdfl);
 
     const handleSave = async () => {
         if (!formData.date || !formData.startTime || !formData.endTime || !formData.hourlyRate) {
@@ -424,7 +428,7 @@ export default function ShiftEditScreen() {
                 >
                     <Text style={{ fontSize: 16, color: Colors.darkGray, fontWeight: '600' }}>Заработок:</Text>
                     <Text style={{ fontSize: 20, color: Colors.primary, fontWeight: 'bold' }}>
-                        {totalEarnings.toFixed(2)} ₽
+                        {applyNdfl(grossEarnings, includeNdfl).toFixed(2)} ₽
                     </Text>
                 </View>
 
