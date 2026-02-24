@@ -19,10 +19,11 @@ import { supabase } from '@/services/supabase/client';
 import ShiftCard from '@/components/ShiftCard';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
-import { calculateEarnings } from '@/utils/calculations';
+import { applyNdfl, calculateEarnings } from '@/utils/calculations';
 import { useTheme } from '@/hooks/useTheme';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import { loadHolidayDateSet } from '@/services/holidays';
+import { defaultTaxSettings, loadTaxSettings } from '@/services/taxSettings';
 
 
 LocaleConfig.locales.ru = {
@@ -54,6 +55,7 @@ export default function CalendarScreen() {
     const [loading, setLoading] = useState(false);
     const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
     const [holidayDateSet, setHolidayDateSet] = useState<Set<string>>(new Set());
+    const [includeNdfl, setIncludeNdfl] = useState(defaultTaxSettings.includeNdfl);
     const [isMonthPickerVisible, setIsMonthPickerVisible] = useState(false);
     const [calendarKey, setCalendarKey] = useState(0);
     const [calendarOpacity] = useState(new Animated.Value(1));
@@ -103,7 +105,7 @@ export default function CalendarScreen() {
             const start = format(startOfMonth(selectedDate), 'yyyy-MM-dd');
             const end = format(endOfMonth(selectedDate), 'yyyy-MM-dd');
 
-            const [{ data, error }, holidays] = await Promise.all([
+            const [{ data, error }, holidays, taxSettings] = await Promise.all([
                 supabase
                     .from('shifts')
                     .select('*')
@@ -113,11 +115,13 @@ export default function CalendarScreen() {
                     .order('date', { ascending: false })
                     .order('start_time', { ascending: true }),
                 loadHolidayDateSet(),
+                loadTaxSettings(),
             ]);
 
             if (error) throw error;
             setShifts((data as Shift[]) ?? []);
             setHolidayDateSet(holidays);
+            setIncludeNdfl(taxSettings.includeNdfl);
         } catch (error) {
             console.error('Error fetching shifts:', error);
         } finally {
@@ -183,8 +187,20 @@ export default function CalendarScreen() {
     const dayEarnings = filteredShifts.reduce((total, shift) => {
         const start = shift.start_time?.split(':').slice(0, 2).join(':');
         const end = shift.end_time?.split(':').slice(0, 2).join(':');
-        return total + calculateEarnings(start, end, shift.hourly_rate ?? 0, shift.extra_payment ?? 0, shift.break ?? 0);
+        const gross = calculateEarnings(start, end, shift.hourly_rate ?? 0, shift.extra_payment ?? 0, shift.break ?? 0);
+        return total + applyNdfl(gross, includeNdfl);
     }, 0);
+
+    const shiftTotal = (shift: Shift) => applyNdfl(
+        calculateEarnings(
+            shift.start_time?.split(':').slice(0, 2).join(':'),
+            shift.end_time?.split(':').slice(0, 2).join(':'),
+            shift.hourly_rate ?? 0,
+            shift.extra_payment ?? 0,
+            shift.break ?? 0,
+        ),
+        includeNdfl,
+    );
 
     const handleDeleteShift = () => {
         if (!selectedShift) return;
@@ -320,13 +336,7 @@ export default function CalendarScreen() {
                         <Text style={styles.modalLine}>💸 Ставка: {selectedShift?.hourly_rate ?? 0} ₽/ч</Text>
                         <Text style={styles.modalLine}>☕ Перерыв: {selectedShift?.break ?? 0} мин</Text>
                         <Text style={styles.modalLine}>➕ Доплата: {selectedShift?.extra_payment ?? 0} ₽</Text>
-                        <Text style={styles.modalEarnings}>Итого: {selectedShift ? calculateEarnings(
-                            selectedShift.start_time?.split(':').slice(0, 2).join(':'),
-                            selectedShift.end_time?.split(':').slice(0, 2).join(':'),
-                            selectedShift.hourly_rate ?? 0,
-                            selectedShift.extra_payment ?? 0,
-                            selectedShift.break ?? 0,
-                        ).toFixed(2) : '0.00'} ₽</Text>
+                        <Text style={styles.modalEarnings}>Итого: {selectedShift ? shiftTotal(selectedShift).toFixed(2) : '0.00'} ₽</Text>
                         {!!selectedShift?.notes && (
                             <Text style={styles.modalNote}>📝 {selectedShift.notes}</Text>
                         )}
