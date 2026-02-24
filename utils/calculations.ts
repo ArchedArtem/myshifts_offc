@@ -94,6 +94,14 @@ export const calculateNetEarnings = (
     return earnings - tax;
 };
 
+
+export const NDFL_RATE = 13;
+
+export const applyNdfl = (earnings: number, includeNdfl: boolean): number => {
+    if (!includeNdfl) return earnings;
+    return calculateNetEarnings(earnings, NDFL_RATE);
+};
+
 /**
  * Расчет сверхурочных (пример: 1.5x за первые 2 часа, 2x далее)
  */
