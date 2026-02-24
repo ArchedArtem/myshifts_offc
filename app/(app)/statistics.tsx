@@ -147,7 +147,7 @@ export default function StatisticsScreen() {
         includeNdfl: boolean,
     ): CalculatedStatistics => {
         const baseEarnings = shifts.reduce(
-            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, taxSettings.includeNdfl),
+            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl),
             0,
         );
         const totalHours = shifts.reduce((sum, shift) => sum + getShiftHours(shift), 0);
