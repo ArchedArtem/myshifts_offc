@@ -147,7 +147,7 @@ export default function StatisticsScreen() {
         includeNdfl: boolean,
     ): CalculatedStatistics => {
         const baseEarnings = shifts.reduce(
-            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl),
+            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, taxSettings.includeNdfl),
             0,
         );
         const totalHours = shifts.reduce((sum, shift) => sum + getShiftHours(shift), 0);
@@ -310,7 +310,7 @@ export default function StatisticsScreen() {
                 const firstHalfEarnings = currentShifts
                     .filter((shift) => parseISO(shift.date).getDate() <= 15)
                     .reduce(
-                        (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl),
+                        (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, taxSettings.includeNdfl),
                         0,
                     );
                 const secondHalfEarnings = Math.max(0, currentStats.baseEarnings - firstHalfEarnings);
