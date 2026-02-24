@@ -4,9 +4,10 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO } fr
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/services/supabase/client';
-import { calculateDuration, calculateEarnings } from '@/utils/calculations';
+import { applyNdfl, calculateDuration, calculateEarnings } from '@/utils/calculations';
 import { useTheme } from '@/hooks/useTheme';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
+import { loadTaxSettings } from '@/services/taxSettings';
 
 type ShiftRow = {
   date: string;
@@ -37,22 +38,23 @@ export default function WidgetsScreen() {
     const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-    const [{ data: monthData }, { data: weekData }, { data: nextData }] = await Promise.all([
+    const [{ data: monthData }, { data: weekData }, { data: nextData }, taxSettings] = await Promise.all([
       supabase.from('shifts').select('*').eq('user_id', user.id).gte('date', monthStart).lte('date', monthEnd),
       supabase.from('shifts').select('*').eq('user_id', user.id).gte('date', weekStart).lte('date', weekEnd),
       supabase.from('shifts').select('date, start_time').eq('user_id', user.id).gte('date', format(now, 'yyyy-MM-dd')).order('date', { ascending: true }).order('start_time', { ascending: true }).limit(1),
+      loadTaxSettings(),
     ]);
 
     const monthRows = (monthData || []) as ShiftRow[];
     const weekRows = (weekData || []) as ShiftRow[];
 
-    const earnings = monthRows.reduce((sum, shift) => sum + calculateEarnings(
+    const earnings = monthRows.reduce((sum, shift) => sum + applyNdfl(calculateEarnings(
       normalizeTime(shift.start_time),
       normalizeTime(shift.end_time),
       shift.hourly_rate ?? 0,
       shift.extra_payment ?? 0,
       shift.break ?? 0,
-    ), 0);
+    ), taxSettings.includeNdfl), 0);
 
     const hours = weekRows.reduce((sum, shift) => sum + calculateDuration(
       normalizeTime(shift.start_time),

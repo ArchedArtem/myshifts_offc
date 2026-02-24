@@ -23,8 +23,9 @@ import {
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
-import { calculateDuration, calculateEarnings } from '@/utils/calculations';
+import { applyNdfl, calculateDuration, calculateEarnings } from '@/utils/calculations';
 import { BonusSettings, defaultBonusSettings, loadBonusSettings } from '@/services/bonusSettings';
+import { loadTaxSettings } from '@/services/taxSettings';
 import { useTheme } from '@/hooks/useTheme';
 import { loadHolidayDateSet } from '@/services/holidays';
 
@@ -98,14 +99,13 @@ const getShiftHours = (shift: Shift) => calculateDuration(
     shift.break ?? 0,
 );
 
-const NDFL_RATE = 0.13;
-const TAKE_HOME_MULTIPLIER = 1 - NDFL_RATE;
 const HOLIDAY_SHIFT_BONUS = 50;
 
 const getShiftEarnings = (
     shift: Shift,
     holidayDateSet: Set<string>,
     bonusSystemEnabled: boolean,
+    includeNdfl: boolean,
 ) => {
     const gross = calculateEarnings(
         normalizeTime(shift.start_time),
@@ -118,7 +118,7 @@ const getShiftEarnings = (
     const grossWithHoliday = holidayDateSet.has(shift.date)
         ? (gross * 2) + (bonusSystemEnabled ? HOLIDAY_SHIFT_BONUS : 0)
         : gross;
-    return grossWithHoliday * TAKE_HOME_MULTIPLIER;
+    return applyNdfl(grossWithHoliday, includeNdfl);
 };
 
 const weekdayNames = ['воскресенье', 'понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу'];
@@ -144,9 +144,10 @@ export default function StatisticsScreen() {
         loadedBonusSettings: BonusSettings,
         withBonuses: boolean,
         holidayDateSet: Set<string>,
+        includeNdfl: boolean,
     ): CalculatedStatistics => {
         const baseEarnings = shifts.reduce(
-            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled),
+            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, taxSettings.includeNdfl),
             0,
         );
         const totalHours = shifts.reduce((sum, shift) => sum + getShiftHours(shift), 0);
@@ -161,7 +162,7 @@ export default function StatisticsScreen() {
 
         shifts.forEach((shift) => {
             const day = parseISO(shift.date).getDay();
-            const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled);
+            const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl);
             const record = weekdayAggregate.get(day) || { earnings: 0, count: 0 };
             record.earnings += shiftEarnings;
             record.count += 1;
@@ -195,7 +196,7 @@ export default function StatisticsScreen() {
                 const weekKey = format(startOfWeek(shiftDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
                 const shiftHours = getShiftHours(shift);
-                const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled);
+                const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl);
 
                 const monthRecord = monthlyMap.get(monthKey) || { earnings: 0, hours: 0 };
                 monthRecord.earnings += shiftEarnings;
@@ -219,7 +220,7 @@ export default function StatisticsScreen() {
 
             weeklyMap.forEach((weekData) => {
                 if (loadedBonusSettings.anyAvailabilityBonusEnabled && weekData.hours >= 40) {
-                    anyAvailabilityBonus += 17000 * TAKE_HOME_MULTIPLIER;
+                    anyAvailabilityBonus += applyNdfl(17000, includeNdfl);
                 }
 
                 if (
@@ -227,7 +228,7 @@ export default function StatisticsScreen() {
                     && weekData.hours >= 35
                     && weekData.hasWeekendShift
                 ) {
-                    fullTimeAvailabilityBonus += 10000 * TAKE_HOME_MULTIPLIER;
+                    fullTimeAvailabilityBonus += applyNdfl(10000, includeNdfl);
                 }
             });
         }
@@ -275,9 +276,10 @@ export default function StatisticsScreen() {
                 query = query.gte('date', startForCurrent).lte('date', endForCurrent);
             }
 
-            const [{ data, error }, loadedBonusSettings, holidayDateSet] = await Promise.all([
+            const [{ data, error }, loadedBonusSettings, taxSettings, holidayDateSet] = await Promise.all([
                 query,
                 loadBonusSettings(),
+                loadTaxSettings(),
                 loadHolidayDateSet(),
             ]);
 
@@ -285,7 +287,7 @@ export default function StatisticsScreen() {
 
             const currentShifts = (data || []) as Shift[];
             setBonusSettings(loadedBonusSettings);
-            setStatistics(computeStats(currentShifts, loadedBonusSettings, selectedPeriod === 'month', holidayDateSet));
+            setStatistics(computeStats(currentShifts, loadedBonusSettings, selectedPeriod === 'month', holidayDateSet, taxSettings.includeNdfl));
 
             if (selectedPeriod === 'month') {
                 const prevMonthDate = addMonths(monthPickerDate, -1);
@@ -301,14 +303,14 @@ export default function StatisticsScreen() {
 
                 if (prevError) throw prevError;
 
-                const prevStats = computeStats((prevData || []) as Shift[], loadedBonusSettings, true, holidayDateSet);
-                const currentStats = computeStats(currentShifts, loadedBonusSettings, true, holidayDateSet);
+                const prevStats = computeStats((prevData || []) as Shift[], loadedBonusSettings, true, holidayDateSet, taxSettings.includeNdfl);
+                const currentStats = computeStats(currentShifts, loadedBonusSettings, true, holidayDateSet, taxSettings.includeNdfl);
 
                 const monthlyBonuses = Math.max(0, currentStats.totalWithBonuses - currentStats.baseEarnings);
                 const firstHalfEarnings = currentShifts
                     .filter((shift) => parseISO(shift.date).getDate() <= 15)
                     .reduce(
-                        (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled),
+                        (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, taxSettings.includeNdfl),
                         0,
                     );
                 const secondHalfEarnings = Math.max(0, currentStats.baseEarnings - firstHalfEarnings);
@@ -560,7 +562,7 @@ export default function StatisticsScreen() {
                                         <Text style={styles.payrollSubLine}>
                                             Доход 16–конец ({payrollSummary.secondHalfEarnings.toFixed(2)} ₽) + премии ({payrollSummary.monthlyBonuses.toFixed(2)} ₽)
                                         </Text>
-                                        <Text style={styles.payrollHint}>Суммы уже рассчитаны с учетом НДФЛ 13% и двойной ставки в праздники РФ.</Text>
+                                        <Text style={styles.payrollHint}>Суммы рассчитаны с учетом текущей настройки НДФЛ и двойной ставки в праздники РФ.</Text>
                                     </>
                                 ) : (
                                     <Text style={styles.payrollSubLine}>Данные появятся при выборе периода «Месяц».</Text>

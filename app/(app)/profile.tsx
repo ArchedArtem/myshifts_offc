@@ -162,6 +162,9 @@ export default function ProfileScreen() {
                 <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount} disabled={loading}>
                     <Text style={styles.deleteButtonText}>{loading ? 'Удаление...' : 'Удалить аккаунт'}</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={styles.supportButton} activeOpacity={0.85}>
+                    <Text style={styles.supportButtonText}>Поддержать разработчика ❤️</Text>
+                </TouchableOpacity>
             </View>
         </ScrollView>
     );
@@ -278,4 +281,20 @@ const createStyles = () => StyleSheet.create({
         fontWeight: '600',
         color: Colors.error,
     },
+    supportButton: {
+        marginTop: 14,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 999,
+        alignSelf: 'center',
+        backgroundColor: Colors.white,
+    },
+    supportButtonText: {
+        fontSize: 13,
+        color: Colors.primary,
+        fontWeight: '600',
+    },
+
 });
