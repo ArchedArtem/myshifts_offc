@@ -31,7 +31,7 @@ export default function HelpScreen() {
   const styles = createStyles();
 
   const openEmail = async () => {
-    const url = 'mailto:archedartem@gmail.com?subject=MyShifts%20Support';
+    const url = 'mailto:support@myshifts.ru?subject=MyShifts%20Support';
     const supported = await Linking.canOpenURL(url);
     if (!supported) {
       Alert.alert('Ошибка', 'Не удалось открыть почтовый клиент');

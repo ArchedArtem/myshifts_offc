@@ -69,7 +69,7 @@ export default function CalendarScreen() {
 
     const availableMonths = useMemo(() => {
         const base = startOfMonth(new Date());
-        return Array.from({ length: 61 }, (_, index) => addMonths(base, index - 30));
+        return Array.from({ length: 21 }, (_, index) => addMonths(base, index - 10));
     }, []);
 
     const animateCalendarTransition = useCallback((direction: 1 | -1) => {
