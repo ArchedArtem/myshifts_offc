@@ -20,6 +20,10 @@ const faq = [
     q: 'Как удалить смену?',
     a: 'На главном экране нажмите на карточку смены → «Удалить».',
   },
+  {
+    q: 'Почему сумма отличается от моей?',
+    a: 'В приложении итог рассчитывается после удержания НДФЛ 13%. Также сумма может меняться из-за перерыва, доплат и округления минут.',
+  },
 ];
 
 export default function HelpScreen() {
@@ -27,7 +31,7 @@ export default function HelpScreen() {
   const styles = createStyles();
 
   const openEmail = async () => {
-    const url = 'mailto:archedartem@gmail.com?subject=MyShifts%20Support';
+    const url = 'mailto:support@myshifts.ru?subject=MyShifts%20Support';
     const supported = await Linking.canOpenURL(url);
     if (!supported) {
       Alert.alert('Ошибка', 'Не удалось открыть почтовый клиент');

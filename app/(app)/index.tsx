@@ -8,11 +8,12 @@ import {
     Pressable,
     Alert,
     StyleSheet,
+    Animated,
 } from 'react-native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { addMonths, format, startOfMonth, endOfMonth } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { supabase } from '@/services/supabase/client';
 import ShiftCard from '@/components/ShiftCard';
@@ -53,6 +54,10 @@ export default function CalendarScreen() {
     const [loading, setLoading] = useState(false);
     const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
     const [holidayDateSet, setHolidayDateSet] = useState<Set<string>>(new Set());
+    const [isMonthPickerVisible, setIsMonthPickerVisible] = useState(false);
+    const [calendarKey, setCalendarKey] = useState(0);
+    const [calendarOpacity] = useState(new Animated.Value(1));
+    const [calendarTranslateX] = useState(new Animated.Value(0));
 
     const router = useRouter();
     const { user } = useAuth();
@@ -60,6 +65,35 @@ export default function CalendarScreen() {
     const styles = createStyles();
 
     const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+    const selectedMonthStart = startOfMonth(selectedDate);
+
+    const availableMonths = useMemo(() => {
+        const base = startOfMonth(new Date());
+        return Array.from({ length: 21 }, (_, index) => addMonths(base, index - 10));
+    }, []);
+
+    const animateCalendarTransition = useCallback((direction: 1 | -1) => {
+        calendarOpacity.setValue(0);
+        calendarTranslateX.setValue(10 * direction);
+        Animated.parallel([
+            Animated.timing(calendarOpacity, {
+                toValue: 1,
+                duration: 220,
+                useNativeDriver: true,
+            }),
+            Animated.timing(calendarTranslateX, {
+                toValue: 0,
+                duration: 220,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, [calendarOpacity, calendarTranslateX]);
+
+    const applyMonthSelection = useCallback((nextDate: Date, direction: 1 | -1) => {
+        setSelectedDate(nextDate);
+        setCalendarKey((prev) => prev + 1);
+        animateCalendarTransition(direction);
+    }, [animateCalendarTransition]);
 
     const fetchShifts = useCallback(async () => {
         if (!user) return;
@@ -183,25 +217,50 @@ export default function CalendarScreen() {
         ]);
     };
 
+    const handleMonthChange = (monthDate: Date) => {
+        const diffDirection = monthDate.getTime() >= selectedMonthStart.getTime() ? 1 : -1;
+        applyMonthSelection(monthDate, diffDirection);
+    };
+
     return (
         <View style={{ flex: 1, backgroundColor: Colors.background }}>
-            <Calendar
-                current={formattedDate}
-                onDayPress={(day: { dateString: string }) => setSelectedDate(new Date(day.dateString))}
-                onMonthChange={(month: { dateString: string }) => setSelectedDate(new Date(month.dateString))}
-                markedDates={markedDates}
-                theme={{
-                    calendarBackground: Colors.white,
-                    selectedDayBackgroundColor: Colors.secondary,
-                    todayTextColor: Colors.primary,
-                    dayTextColor: Colors.darkGray,
-                    monthTextColor: Colors.primary,
-                    arrowColor: Colors.primary,
+            <Animated.View
+                style={{
+                    opacity: calendarOpacity,
+                    transform: [{ translateX: calendarTranslateX }],
                 }}
-                firstDay={1}
-                enableSwipeMonths
-                markingType="custom"
-            />
+            >
+                <Calendar
+                    key={calendarKey}
+                    current={formattedDate}
+                    onDayPress={(day: { dateString: string }) => setSelectedDate(new Date(day.dateString))}
+                    onMonthChange={(month: { dateString: string }) => {
+                        handleMonthChange(new Date(month.dateString));
+                    }}
+                    markedDates={markedDates}
+                    renderHeader={(date: Date) => (
+                        <TouchableOpacity
+                            style={styles.monthHeaderButton}
+                            onPress={() => setIsMonthPickerVisible(true)}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.monthHeaderText}>{format(date, 'LLLL yyyy', { locale: ru })}</Text>
+                            <Text style={styles.monthHeaderHint}>Нажмите для быстрого выбора</Text>
+                        </TouchableOpacity>
+                    )}
+                    theme={{
+                        calendarBackground: Colors.white,
+                        selectedDayBackgroundColor: Colors.secondary,
+                        todayTextColor: Colors.primary,
+                        dayTextColor: Colors.darkGray,
+                        monthTextColor: Colors.primary,
+                        arrowColor: Colors.primary,
+                    }}
+                    firstDay={1}
+                    enableSwipeMonths
+                    markingType="custom"
+                />
+            </Animated.View>
 
 
             <View style={{ padding: 16, backgroundColor: Colors.white }}>
@@ -298,6 +357,41 @@ export default function CalendarScreen() {
                     </Pressable>
                 </Pressable>
             </Modal>
+
+            <Modal
+                visible={isMonthPickerVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsMonthPickerVisible(false)}
+            >
+                <Pressable style={styles.overlay} onPress={() => setIsMonthPickerVisible(false)}>
+                    <Pressable style={styles.monthPickerCard} onPress={() => {}}>
+                        <Text style={styles.monthPickerTitle}>Выберите месяц</Text>
+                        <FlatList
+                            data={availableMonths}
+                            keyExtractor={(item) => format(item, 'yyyy-MM')}
+                            style={styles.monthPickerList}
+                            renderItem={({ item }) => {
+                                const isActive = format(item, 'yyyy-MM') === format(selectedMonthStart, 'yyyy-MM');
+                                return (
+                                    <TouchableOpacity
+                                        style={[styles.monthItem, isActive && styles.monthItemActive]}
+                                        onPress={() => {
+                                            const direction = item.getTime() >= selectedMonthStart.getTime() ? 1 : -1;
+                                            applyMonthSelection(item, direction);
+                                            setIsMonthPickerVisible(false);
+                                        }}
+                                    >
+                                        <Text style={[styles.monthItemText, isActive && styles.monthItemTextActive]}>
+                                            {format(item, 'LLLL yyyy', { locale: ru })}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </View>
     );
 }
@@ -373,5 +467,59 @@ const createStyles = () => StyleSheet.create({
     actionText: {
         color: Colors.onPrimary,
         fontWeight: '600',
+    },
+    monthHeaderButton: {
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 10,
+        backgroundColor: Colors.lightPrimary,
+    },
+    monthHeaderText: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: Colors.primary,
+        textTransform: 'capitalize',
+    },
+    monthHeaderHint: {
+        marginTop: 2,
+        fontSize: 11,
+        color: Colors.gray,
+    },
+    monthPickerCard: {
+        backgroundColor: Colors.white,
+        borderRadius: 14,
+        padding: 16,
+        maxHeight: '72%',
+    },
+    monthPickerTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: Colors.darkGray,
+        marginBottom: 12,
+    },
+    monthPickerList: {
+        minWidth: 280,
+    },
+    monthItem: {
+        borderRadius: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        marginBottom: 8,
+        backgroundColor: Colors.lightGray,
+    },
+    monthItemActive: {
+        backgroundColor: Colors.lightPrimary,
+        borderWidth: 1,
+        borderColor: Colors.primary,
+    },
+    monthItemText: {
+        fontSize: 15,
+        color: Colors.darkGray,
+        textTransform: 'capitalize',
+    },
+    monthItemTextActive: {
+        color: Colors.primary,
+        fontWeight: '700',
     },
 });
