@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/services/supabase/client';
 import Colors from '@/constants/Colors';
 import { BonusSettings, defaultBonusSettings, loadBonusSettings, saveBonusSettings } from '@/services/bonusSettings';
+import { defaultTaxSettings, loadTaxSettings, saveTaxSettings, TaxSettings } from '@/services/taxSettings';
 import { useTheme } from '@/hooks/useTheme';
 
 interface ProfileForm {
@@ -18,6 +19,7 @@ export default function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ProfileForm>({ email: '', full_name: '', phone: '', default_hourly_rate: '' });
   const [bonusSettings, setBonusSettings] = useState<BonusSettings>(defaultBonusSettings);
+  const [taxSettings, setTaxSettings] = useState<TaxSettings>(defaultTaxSettings);
   const { user } = useAuth();
   const router = useRouter();
   useTheme();
@@ -44,8 +46,12 @@ export default function SettingsScreen() {
         });
       }
 
-      const loadedBonusSettings = await loadBonusSettings();
+      const [loadedBonusSettings, loadedTaxSettings] = await Promise.all([
+        loadBonusSettings(),
+        loadTaxSettings(),
+      ]);
       setBonusSettings(loadedBonusSettings);
+      setTaxSettings(loadedTaxSettings);
     };
 
     loadProfile();
@@ -83,7 +89,10 @@ export default function SettingsScreen() {
 
       if (error) throw new Error(error.message);
 
-      await saveBonusSettings(bonusSettings);
+      await Promise.all([
+        saveBonusSettings(bonusSettings),
+        saveTaxSettings(taxSettings),
+      ]);
 
       Alert.alert('Успешно', 'Настройки сохранены', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (error: any) {
@@ -110,6 +119,19 @@ export default function SettingsScreen() {
       <TextInput style={styles.input} value={form.default_hourly_rate} onChangeText={(v) => setForm((p) => ({ ...p, default_hourly_rate: v }))} placeholder="500" keyboardType="numeric" />
 
       <View style={styles.bonusCard}>
+        <View style={[styles.row, styles.firstRow]}>
+          <View style={styles.rowTextWrap}>
+            <Text style={styles.rowTitle}>Учитывать НДФЛ 13%</Text>
+            <Text style={styles.rowDescription}>Если включено, в доходах показывается сумма после удержания налога</Text>
+          </View>
+          <Switch
+            value={taxSettings.includeNdfl}
+            onValueChange={(value) => setTaxSettings((prev) => ({ ...prev, includeNdfl: value }))}
+            thumbColor={taxSettings.includeNdfl ? Colors.primary : '#f4f3f4'}
+            trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
+          />
+        </View>
+
         <Text style={styles.bonusTitle}>Система премий (для работников ВиТ)</Text>
 
         <View style={styles.row}>
@@ -188,6 +210,7 @@ const createStyles = () => StyleSheet.create({
   bonusCard: { marginTop: 16, backgroundColor: Colors.white, borderRadius: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border },
   bonusTitle: { fontSize: 17, fontWeight: '700', color: Colors.darkGray, paddingTop: 12, paddingBottom: 8 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 12 },
+  firstRow: { borderTopWidth: 0 },
   lastRow: { borderBottomWidth: 0 },
   rowTextWrap: { flex: 1, paddingRight: 10 },
   rowTitle: { fontSize: 15, fontWeight: '600', color: Colors.darkGray },
