@@ -32,12 +32,15 @@ export default function HelpScreen() {
 
   const openEmail = async () => {
     const url = 'mailto:support@myshifts.ru?subject=MyShifts%20Support';
-    const supported = await Linking.canOpenURL(url);
-    if (!supported) {
-      Alert.alert('Ошибка', 'Не удалось открыть почтовый клиент');
-      return;
+
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(
+        'Ошибка',
+        'Не удалось открыть почтовый клиент. Напишите нам вручную: support@myshifts.ru',
+      );
     }
-    await Linking.openURL(url);
   };
 
   return (
