@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Colors from '@/constants/Colors';
 import { useTheme } from '@/hooks/useTheme';
@@ -9,6 +9,12 @@ const ADMIN_EMAIL = 'archedartem@gmail.com'; // поменять здесь пр
 
 type TargetMode = 'all' | 'single';
 
+type ProfileOption = {
+  id: string;
+  email: string;
+  full_name: string | null;
+};
+
 export default function AdminNotificationsScreen() {
   const { user } = useAuth();
   useTheme();
@@ -17,10 +23,83 @@ export default function AdminNotificationsScreen() {
   const [targetMode, setTargetMode] = useState<TargetMode>('all');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [email, setEmail] = useState('');
+  const [emailQuery, setEmailQuery] = useState('');
+  const [selectedUser, setSelectedUser] = useState<ProfileOption | null>(null);
+  const [searchResults, setSearchResults] = useState<ProfileOption[]>([]);
+  const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const isAdmin = useMemo(() => (user?.email || '').toLowerCase() === ADMIN_EMAIL, [user?.email]);
+
+  const searchProfiles = useCallback(async (rawQuery: string) => {
+    const normalized = rawQuery.trim();
+    if (!normalized) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .ilike('email', `%${normalized}%`)
+        .order('email', { ascending: true })
+        .limit(20);
+
+      if (error) throw error;
+      setSearchResults((data || []) as ProfileOption[]);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  const handleEmailChange = async (value: string) => {
+    setEmailQuery(value);
+
+    if (selectedUser && selectedUser.email.toLowerCase() !== value.trim().toLowerCase()) {
+      setSelectedUser(null);
+    }
+
+    await searchProfiles(value);
+  };
+
+  const resolveTargetUser = async (): Promise<ProfileOption | null> => {
+    if (selectedUser) return selectedUser;
+
+    const normalizedEmail = emailQuery.trim().toLowerCase();
+    if (!normalizedEmail.includes('@')) {
+      Alert.alert('Ошибка', 'Введите корректный email получателя');
+      return null;
+    }
+
+    // 1) Пробуем точное совпадение без учета регистра
+    const { data: exactRows, error: exactError } = await supabase
+      .from('profiles')
+      .select('id, email, full_name')
+      .ilike('email', normalizedEmail)
+      .limit(1);
+
+    if (!exactError && exactRows && exactRows.length > 0) {
+      return exactRows[0] as ProfileOption;
+    }
+
+    // 2) Фолбэк: убираем пробелы и ищем в подстроке (на случай грязных данных)
+    const { data: fuzzyRows, error: fuzzyError } = await supabase
+      .from('profiles')
+      .select('id, email, full_name')
+      .ilike('email', `%${normalizedEmail}%`)
+      .limit(1);
+
+    if (!fuzzyError && fuzzyRows && fuzzyRows.length > 0) {
+      return fuzzyRows[0] as ProfileOption;
+    }
+
+    Alert.alert('Ошибка', 'Пользователь с таким email не найден');
+    return null;
+  };
 
   const handleCreate = async () => {
     const normalizedTitle = title.trim();
@@ -41,24 +120,10 @@ export default function AdminNotificationsScreen() {
       let targetUserId: string | null = null;
 
       if (targetMode === 'single') {
-        const normalizedEmail = email.trim().toLowerCase();
-        if (!normalizedEmail.includes('@')) {
-          Alert.alert('Ошибка', 'Введите корректный email получателя');
-          return;
-        }
+        const targetUser = await resolveTargetUser();
+        if (!targetUser) return;
 
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', normalizedEmail)
-          .single();
-
-        if (profileError || !profile?.id) {
-          Alert.alert('Ошибка', 'Пользователь с таким email не найден');
-          return;
-        }
-
-        targetUserId = profile.id as string;
+        targetUserId = targetUser.id;
       }
 
       const { error } = await supabase
@@ -77,7 +142,9 @@ export default function AdminNotificationsScreen() {
       Alert.alert('Готово', targetMode === 'all' ? 'Уведомление отправлено всем пользователям' : 'Уведомление отправлено выбранному пользователю');
       setTitle('');
       setBody('');
-      setEmail('');
+      setEmailQuery('');
+      setSelectedUser(null);
+      setSearchResults([]);
     } catch (error: any) {
       Alert.alert('Ошибка', error?.message || 'Не удалось создать уведомление');
     } finally {
@@ -104,7 +171,12 @@ export default function AdminNotificationsScreen() {
         <View style={styles.segmentedWrap}>
           <TouchableOpacity
             style={[styles.segmentedButton, targetMode === 'all' && styles.segmentedButtonActive]}
-            onPress={() => setTargetMode('all')}
+            onPress={() => {
+              setTargetMode('all');
+              setSelectedUser(null);
+              setEmailQuery('');
+              setSearchResults([]);
+            }}
           >
             <Text style={[styles.segmentedText, targetMode === 'all' && styles.segmentedTextActive]}>Всем</Text>
           </TouchableOpacity>
@@ -118,16 +190,46 @@ export default function AdminNotificationsScreen() {
 
         {targetMode === 'single' && (
           <>
-            <Text style={styles.label}>Email получателя</Text>
+            <Text style={styles.label}>Email получателя (поиск + выбор)</Text>
             <TextInput
               style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="user@mail.com"
+              value={emailQuery}
+              onChangeText={(value) => { void handleEmailChange(value); }}
+              placeholder="Начните вводить email"
               placeholderTextColor={Colors.gray}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
             />
+
+            {selectedUser && (
+              <Text style={styles.selectedHint}>
+                Выбран: {selectedUser.full_name?.trim() ? `${selectedUser.full_name} · ` : ''}{selectedUser.email}
+              </Text>
+            )}
+
+            {searching ? (
+              <Text style={styles.searchHint}>Поиск пользователей...</Text>
+            ) : searchResults.length > 0 ? (
+              <View style={styles.resultsCard}>
+                {searchResults.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.resultRow}
+                    onPress={() => {
+                      setSelectedUser(item);
+                      setEmailQuery(item.email);
+                      setSearchResults([]);
+                    }}
+                  >
+                    <Text style={styles.resultEmail}>{item.email}</Text>
+                    <Text style={styles.resultName}>{item.full_name?.trim() || 'Без имени'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : emailQuery.trim() ? (
+              <Text style={styles.searchHint}>Совпадений не найдено, можно отправить по точному email.</Text>
+            ) : null}
           </>
         )}
 
@@ -187,6 +289,24 @@ const createStyles = () => StyleSheet.create({
   segmentedButtonActive: { backgroundColor: Colors.primary },
   segmentedText: { color: Colors.darkGray, fontWeight: '600' },
   segmentedTextActive: { color: Colors.onPrimary },
+  selectedHint: { marginTop: 8, fontSize: 12, color: Colors.primary, fontWeight: '600' },
+  searchHint: { marginTop: 8, fontSize: 12, color: Colors.gray },
+  resultsCard: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  resultRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.white,
+  },
+  resultEmail: { fontSize: 14, color: Colors.darkGray, fontWeight: '600' },
+  resultName: { marginTop: 2, fontSize: 12, color: Colors.gray },
   saveButton: { marginTop: 16, backgroundColor: Colors.primary, borderRadius: 10, alignItems: 'center', padding: 14 },
   saveText: { color: Colors.onPrimary, fontWeight: '600', fontSize: 16 },
   disabled: { opacity: 0.7 },

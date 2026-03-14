@@ -27,7 +27,8 @@ alter table public.announcements enable row level security;
 alter table public.announcement_reads enable row level security;
 
 -- announcements: читать только активные, адресованные всем или конкретно себе
-create policy if not exists "announcements_select_for_users"
+drop policy if exists "announcements_select_for_users" on public.announcements;
+create policy "announcements_select_for_users"
 on public.announcements
 for select
 to authenticated
@@ -37,36 +38,50 @@ using (
 );
 
 -- announcements: создавать/изменять/удалять только админу по email
-create policy if not exists "announcements_admin_insert"
+drop policy if exists "announcements_admin_insert" on public.announcements;
+create policy "announcements_admin_insert"
 on public.announcements
 for insert
 to authenticated
 with check ((auth.jwt() ->> 'email') = 'archedartem@gmail.com');
 
-create policy if not exists "announcements_admin_update"
+drop policy if exists "announcements_admin_update" on public.announcements;
+create policy "announcements_admin_update"
 on public.announcements
 for update
 to authenticated
 using ((auth.jwt() ->> 'email') = 'archedartem@gmail.com')
 with check ((auth.jwt() ->> 'email') = 'archedartem@gmail.com');
 
-create policy if not exists "announcements_admin_delete"
+drop policy if exists "announcements_admin_delete" on public.announcements;
+create policy "announcements_admin_delete"
 on public.announcements
 for delete
 to authenticated
 using ((auth.jwt() ->> 'email') = 'archedartem@gmail.com');
 
 -- announcement_reads: пользователь может видеть/создавать только свои отметки прочтения
-create policy if not exists "announcement_reads_select_own"
+drop policy if exists "announcement_reads_select_own" on public.announcement_reads;
+create policy "announcement_reads_select_own"
 on public.announcement_reads
 for select
 to authenticated
 using (user_id = auth.uid());
 
-create policy if not exists "announcement_reads_insert_own"
+drop policy if exists "announcement_reads_insert_own" on public.announcement_reads;
+create policy "announcement_reads_insert_own"
 on public.announcement_reads
 for insert
 to authenticated
 with check (user_id = auth.uid());
+
+-- profiles: для админа нужен просмотр списка пользователей по email в админ-панели
+-- Если у вас уже есть политика на select для себя, эта политика добавит доступ только админу.
+drop policy if exists "profiles_admin_select_by_email" on public.profiles;
+create policy "profiles_admin_select_by_email"
+on public.profiles
+for select
+to authenticated
+using ((auth.jwt() ->> 'email') = 'archedartem@gmail.com');
 
 commit;
