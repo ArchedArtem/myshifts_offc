@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { addDays, format } from 'date-fns';
 import { supabase } from '@/services/supabase/client';
+import { registerDevicePushToken } from '@/services/pushNotifications';
 
 const IDS_KEY = 'myshifts_notification_ids_v1';
 export const NOTIFICATION_SETTINGS_KEY = 'myshifts_notification_settings_v1';
@@ -207,6 +208,26 @@ export const initializeNotifications = async () => {
   await ensureAndroidChannel(Notifications, settings);
 
   return true;
+};
+
+export const syncPushTokenForUser = async (userId: string): Promise<{ ok: boolean; reason?: string }> => {
+  const Notifications = await loadExpoNotifications();
+  if (!Notifications) {
+    return { ok: false, reason: 'Не удалось инициализировать модуль уведомлений.' };
+  }
+
+  const permissions = await Notifications.getPermissionsAsync();
+  let status = permissions.status;
+  if (status !== 'granted') {
+    const requested = await Notifications.requestPermissionsAsync();
+    status = requested.status;
+  }
+
+  if (status !== 'granted') {
+    return { ok: false, reason: 'Нет разрешения на push-уведомления.' };
+  }
+
+  return registerDevicePushToken(Notifications, userId);
 };
 
 export const applyNotificationSettings = async (
