@@ -82,7 +82,7 @@ function buildWidget(state: NextShiftWidgetState): WidgetRepresentation {
 
       <TextWidget
         text={`Обновлено ${state.updatedAt}`}
-        style={{ marginTop: 10, color: '#64748B', fontSize: 11 }}
+        style={{ marginTop: 4, color: '#64748B', fontSize: 11 }}
         truncate="END"
         maxLines={1}
       />
