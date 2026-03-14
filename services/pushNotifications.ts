@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { supabase } from '@/services/supabase/client';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -44,6 +45,24 @@ const normalizeToken = (value: unknown): string | null => {
   return token;
 };
 
+const getReleaseHint = (message: string): string => {
+  const lower = message.toLowerCase();
+
+  if (Platform.OS === 'android') {
+    if (lower.includes('firebase') || lower.includes('default firebaseapp')) {
+      return 'Android release: проверьте FCM-конфиг (google-services.json + credentials в EAS Project).';
+    }
+
+    return 'Android release: проверьте, что build сделан через EAS для этого projectId и что FCM credentials загружены в Expo/EAS.';
+  }
+
+  if (Platform.OS === 'ios') {
+    return 'iOS release: проверьте APNs key/certificate в EAS Project и entitlement для push notifications.';
+  }
+
+  return 'Проверьте push credentials для release-сборки в EAS Project.';
+};
+
 export const registerDevicePushToken = async (
   Notifications: any,
   userId: string,
@@ -73,9 +92,10 @@ export const registerDevicePushToken = async (
     }
 
     if (!token) {
+      const releaseHint = getReleaseHint(lastErrorMessage);
       return {
         ok: false,
-        reason: `Не удалось получить корректный push-токен. Проверьте, что это dev/release-сборка (не web), и что разрешения выданы.${lastErrorMessage ? ` Причина: ${lastErrorMessage}` : ''}`,
+        reason: `Не удалось получить корректный push-токен. Проверьте, что это dev/release-сборка (не web), и что разрешения выданы. ${releaseHint}${lastErrorMessage ? ` Причина: ${lastErrorMessage}` : ''}`,
       };
     }
 
@@ -87,7 +107,7 @@ export const registerDevicePushToken = async (
         is_active: true,
       },
       {
-        onConflict: 'expo_push_token',
+        onConflict: 'user_id,expo_push_token',
         ignoreDuplicates: false,
       },
     );
