@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
+import { ru } from 'date-fns/locale';
 import { Platform } from 'react-native';
 import {
   FlexWidget,
@@ -17,12 +18,14 @@ const NEXT_SHIFT_WIDGET_STORAGE_KEY = '@myshifts_next_shift_widget_v1';
 type NextShiftWidgetState = {
   headline: string;
   value: string;
+  details: string;
   updatedAt: string;
 };
 
 const DEFAULT_WIDGET_STATE: NextShiftWidgetState = {
   headline: 'Ближайшая смена',
   value: 'Нет ближайшей смены',
+  details: 'Добавьте смену, чтобы увидеть расписание.',
   updatedAt: '—',
 };
 
@@ -56,7 +59,7 @@ function buildWidget(state: NextShiftWidgetState): WidgetRepresentation {
           paddingVertical: 8,
         }}
       >
-        <TextWidget text="MYSHIFTS" style={{ color: '#93C5FD', fontSize: 11, fontWeight: '700' }} />
+        <TextWidget text="Мои смены" style={{ color: '#93C5FD', fontSize: 11, fontWeight: '700' }} />
         <TextWidget
           text={hasShift ? '● Запланировано' : '● Нет смен'}
           style={{ color: hasShift ? '#86EFAC' : '#FDBA74', fontSize: 11, fontWeight: '700' }}
@@ -73,7 +76,8 @@ function buildWidget(state: NextShiftWidgetState): WidgetRepresentation {
         }}
       >
         <TextWidget text={state.headline} style={{ color: '#94A3B8', fontSize: 12, fontWeight: '500' }} maxLines={1} />
-        <TextWidget text={state.value} style={{ marginTop: 6, color: '#F8FAFC', fontSize: 19, fontWeight: '700' }} maxLines={2} />
+        <TextWidget text={state.value} style={{ marginTop: 6, color: '#F8FAFC', fontSize: 18, fontWeight: '700' }} maxLines={2} />
+        <TextWidget text={state.details} style={{ marginTop: 5, color: '#CBD5E1', fontSize: 12 }} truncate="END" maxLines={1} />
       </FlexWidget>
 
       <TextWidget
@@ -91,12 +95,13 @@ async function getStoredWidgetState(): Promise<NextShiftWidgetState> {
     const raw = await AsyncStorage.getItem(NEXT_SHIFT_WIDGET_STORAGE_KEY);
     if (!raw) return DEFAULT_WIDGET_STATE;
 
-    const parsed = JSON.parse(raw) as NextShiftWidgetState;
+    const parsed = JSON.parse(raw) as Partial<NextShiftWidgetState>;
     if (!parsed?.value) return DEFAULT_WIDGET_STATE;
 
     return {
       headline: parsed.headline || DEFAULT_WIDGET_STATE.headline,
       value: parsed.value || DEFAULT_WIDGET_STATE.value,
+      details: parsed.details || DEFAULT_WIDGET_STATE.details,
       updatedAt: parsed.updatedAt || DEFAULT_WIDGET_STATE.updatedAt,
     };
   } catch {
@@ -154,11 +159,13 @@ export async function syncNextShiftWidgetForUser(userId: string): Promise<void> 
     ? {
         headline: 'Ближайшая смена',
         value: `${format(new Date(`${nearest.date}T00:00:00`), 'dd.MM')} с ${normalizeTime(nearest.start_time)} до ${normalizeTime(nearest.end_time)}`,
+        details: `${format(new Date(`${nearest.date}T00:00:00`), 'EEEE', { locale: ru })} • ${Math.max(0, Math.round((new Date(`${nearest.date}T00:00:00`).getTime() - new Date(today).getTime()) / 86400000))} дн. до начала`,
         updatedAt: format(new Date(), 'dd.MM HH:mm'),
       }
     : {
         headline: 'Ближайшая смена',
         value: 'Нет ближайшей смены',
+        details: 'Добавьте смену, чтобы увидеть расписание.',
         updatedAt: format(new Date(), 'dd.MM HH:mm'),
       };
 
@@ -172,6 +179,7 @@ export async function clearNextShiftWidgetState(): Promise<void> {
   await saveWidgetState({
     headline: 'Ближайшая смена',
     value: 'Войдите в аккаунт',
+    details: 'Авторизуйтесь, чтобы синхронизировать данные.',
     updatedAt: format(new Date(), 'dd.MM HH:mm'),
   });
 
