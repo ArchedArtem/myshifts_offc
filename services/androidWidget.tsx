@@ -31,24 +31,54 @@ let widgetTaskRegistered = false;
 const normalizeTime = (time: string) => time?.split(':').slice(0, 2).join(':') || '--:--';
 
 function buildWidget(state: NextShiftWidgetState): WidgetRepresentation {
+  const hasShift = state.value !== 'Нет ближайшей смены' && state.value !== 'Войдите в аккаунт';
+
   return (
     <FlexWidget
       clickAction="OPEN_APP"
       style={{
         height: 'match_parent',
         width: 'match_parent',
-        padding: 16,
-        backgroundColor: '#E6F0FF',
-        borderRadius: 16,
-        justifyContent: 'center',
+        padding: 14,
+        backgroundColor: '#0F172A',
+        borderRadius: 20,
+        justifyContent: 'space-between',
       }}
     >
-      <TextWidget text="Мои смены" style={{ color: '#0B5ED7', fontSize: 14, fontWeight: '700' }} />
-      <TextWidget text={state.headline} style={{ marginTop: 8, color: '#3F4A5A', fontSize: 13 }} />
-      <TextWidget text={state.value} style={{ marginTop: 4, color: '#0F172A', fontSize: 22, fontWeight: '700' }} maxLines={2} />
+      <FlexWidget
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          backgroundColor: '#1E293B',
+          borderRadius: 14,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+        }}
+      >
+        <TextWidget text="MYSHIFTS" style={{ color: '#93C5FD', fontSize: 11, fontWeight: '700' }} />
+        <TextWidget
+          text={hasShift ? '● Запланировано' : '● Нет смен'}
+          style={{ color: hasShift ? '#86EFAC' : '#FDBA74', fontSize: 11, fontWeight: '700' }}
+        />
+      </FlexWidget>
+
+      <FlexWidget
+        style={{
+          marginTop: 10,
+          backgroundColor: '#111827',
+          borderRadius: 16,
+          paddingHorizontal: 12,
+          paddingVertical: 12,
+        }}
+      >
+        <TextWidget text={state.headline} style={{ color: '#94A3B8', fontSize: 12, fontWeight: '500' }} maxLines={1} />
+        <TextWidget text={state.value} style={{ marginTop: 6, color: '#F8FAFC', fontSize: 19, fontWeight: '700' }} maxLines={2} />
+      </FlexWidget>
+
       <TextWidget
-        text={`Обновлено: ${state.updatedAt}`}
-        style={{ marginTop: 8, color: '#3F4A5A', fontSize: 12 }}
+        text={`Обновлено ${state.updatedAt}`}
+        style={{ marginTop: 10, color: '#64748B', fontSize: 11 }}
         truncate="END"
         maxLines={1}
       />
