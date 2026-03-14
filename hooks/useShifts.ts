@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
-import { supabase } from '@/services/supabase/client';
 import { calculateEarnings } from '@/utils/calculations';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { deleteShiftOfflineAware, getShiftsWithOffline, saveShiftOfflineAware } from '@/services/offlineShifts';
+import { supabase } from '@/services/supabase/client';
 
 interface Shift {
     id: string;
@@ -46,22 +47,11 @@ export function useShifts(userId?: string) {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Пользователь не авторизован');
 
-            let query = supabase
-                .from('shifts')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('date', { ascending: false });
-
-            if (date) {
-                const start = format(startOfMonth(date), 'yyyy-MM-dd');
-                const end = format(endOfMonth(date), 'yyyy-MM-dd');
-                query = query.gte('date', start).lte('date', end);
-            }
-
-            const { data, error: fetchError } = await query;
-
-            if (fetchError) throw fetchError;
-            setShifts(data || []);
+            const targetDate = date || new Date();
+            const start = format(startOfMonth(targetDate), 'yyyy-MM-dd');
+            const end = format(endOfMonth(targetDate), 'yyyy-MM-dd');
+            const payload = await getShiftsWithOffline({ userId: user.id, start, end });
+            setShifts(payload.shifts as Shift[]);
         } catch (err: any) {
             setError(err.message);
             console.error('Error fetching shifts:', err);
@@ -90,16 +80,21 @@ export function useShifts(userId?: string) {
                 earnings,
             };
 
-            const { data, error } = await supabase
-                .from('shifts')
-                .insert([newShift])
-                .select()
-                .single();
+            const result = await saveShiftOfflineAware({
+                userId: user.id,
+                isEdit: false,
+                shiftData: newShift,
+            });
 
-            if (error) throw error;
+            const cached = {
+                id: result.shiftId,
+                ...newShift,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            } as Shift;
 
-            setShifts(prev => [data, ...prev]);
-            return data;
+            setShifts(prev => [cached, ...prev]);
+            return cached;
         } catch (err: any) {
             Alert.alert('Ошибка', err.message);
             return null;
@@ -128,13 +123,15 @@ export function useShifts(userId?: string) {
                 }
             }
 
-            const { error } = await supabase
-                .from('shifts')
-                .update(shiftData)
-                .eq('id', id)
-                .eq('user_id', user.id);
-
-            if (error) throw error;
+            await saveShiftOfflineAware({
+                userId: user.id,
+                isEdit: true,
+                shiftId: id,
+                shiftData: {
+                    ...shiftData,
+                    user_id: user.id,
+                } as any,
+            });
 
             setShifts(prev => prev.map(shift =>
                 shift.id === id ? { ...shift, ...shiftData } : shift
@@ -151,13 +148,7 @@ export function useShifts(userId?: string) {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Пользователь не авторизован');
 
-            const { error } = await supabase
-                .from('shifts')
-                .delete()
-                .eq('id', id)
-                .eq('user_id', user.id);
-
-            if (error) throw error;
+            await deleteShiftOfflineAware({ userId: user.id, shiftId: id });
 
             setShifts(prev => prev.filter(shift => shift.id !== id));
             return true;

@@ -1,15 +1,9 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Colors from '@/constants/Colors';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  findProfileByEmail,
-  PushAudienceMode,
-  PushTargetUser,
-  searchProfilesByEmail,
-  sendAdminPush,
-} from '@/services/pushNotifications';
+import { sendAdminPush } from '@/services/pushNotifications';
 
 const ADMIN_EMAIL = 'archedartem@gmail.com'; // поменять здесь при необходимости
 
@@ -18,56 +12,11 @@ export default function AdminPushScreen() {
   useTheme();
   const styles = createStyles();
 
-  const [targetMode, setTargetMode] = useState<PushAudienceMode>('all');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [emailQuery, setEmailQuery] = useState('');
-  const [selectedUser, setSelectedUser] = useState<PushTargetUser | null>(null);
-  const [searchResults, setSearchResults] = useState<PushTargetUser[]>([]);
-  const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const isAdmin = useMemo(() => (user?.email || '').toLowerCase() === ADMIN_EMAIL, [user?.email]);
-
-  const searchProfiles = useCallback(async (query: string) => {
-    const normalized = query.trim();
-    if (!normalized) {
-      setSearchResults([]);
-      return;
-    }
-
-    setSearching(true);
-    try {
-      const rows = await searchProfilesByEmail(normalized);
-      setSearchResults(rows);
-    } catch {
-      setSearchResults([]);
-    } finally {
-      setSearching(false);
-    }
-  }, []);
-
-  const handleEmailChange = async (value: string) => {
-    setEmailQuery(value);
-
-    if (selectedUser && selectedUser.email.toLowerCase() !== value.trim().toLowerCase()) {
-      setSelectedUser(null);
-    }
-
-    await searchProfiles(value);
-  };
-
-  const resolveTargetUser = async (): Promise<PushTargetUser | null> => {
-    if (selectedUser) return selectedUser;
-
-    const userByEmail = await findProfileByEmail(emailQuery);
-    if (!userByEmail) {
-      Alert.alert('Ошибка', 'Пользователь с таким email не найден');
-      return null;
-    }
-
-    return userByEmail;
-  };
 
   const handleSendPush = async () => {
     const normalizedTitle = title.trim();
@@ -90,27 +39,16 @@ export default function AdminPushScreen() {
         return;
       }
 
-      let targetUserId: string | undefined;
-      if (targetMode === 'single') {
-        const targetUser = await resolveTargetUser();
-        if (!targetUser) return;
-        targetUserId = targetUser.id;
-      }
-
       const result = await sendAdminPush({
         title: normalizedTitle,
         body: normalizedBody,
-        mode: targetMode,
-        targetUserId,
+        mode: 'all',
         createdByUserId: user.id,
       });
 
-      Alert.alert('Готово', `Push отправлены. Доставлено на ${result.sentCount} устройство(а).`);
+      Alert.alert('Готово', `Push отправлены всем. Доставлено на ${result.sentCount} устройство(а).`);
       setTitle('');
       setBody('');
-      setEmailQuery('');
-      setSelectedUser(null);
-      setSearchResults([]);
     } catch (error: any) {
       Alert.alert('Ошибка', error?.message || 'Не удалось отправить push-уведомление');
     } finally {
@@ -129,79 +67,10 @@ export default function AdminPushScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Админ-панель push</Text>
-      <Text style={styles.subtitle}>Отправляйте push-уведомления всем или конкретному пользователю.</Text>
+      <Text style={styles.title}>Админ push</Text>
+      <Text style={styles.subtitle}>Короткий режим: отправка только всем пользователям.</Text>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Кому отправить</Text>
-        <View style={styles.segmentedWrap}>
-          <TouchableOpacity
-            style={[styles.segmentedButton, targetMode === 'all' && styles.segmentedButtonActive]}
-            onPress={() => {
-              setTargetMode('all');
-              setSelectedUser(null);
-              setEmailQuery('');
-              setSearchResults([]);
-            }}
-          >
-            <Text style={[styles.segmentedText, targetMode === 'all' && styles.segmentedTextActive]}>Всем</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.segmentedButton, targetMode === 'single' && styles.segmentedButtonActive]}
-            onPress={() => setTargetMode('single')}
-          >
-            <Text style={[styles.segmentedText, targetMode === 'single' && styles.segmentedTextActive]}>По email</Text>
-          </TouchableOpacity>
-        </View>
-
-        {targetMode === 'single' && (
-          <>
-            <Text style={styles.label}>Email получателя (поиск + выбор)</Text>
-            <TextInput
-              style={styles.input}
-              value={emailQuery}
-              onChangeText={(value) => {
-                void handleEmailChange(value);
-              }}
-              placeholder="Начните вводить email"
-              placeholderTextColor={Colors.gray}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            {selectedUser && (
-              <Text style={styles.selectedHint}>
-                Выбран: {selectedUser.full_name?.trim() ? `${selectedUser.full_name} · ` : ''}
-                {selectedUser.email}
-              </Text>
-            )}
-
-            {searching ? (
-              <Text style={styles.searchHint}>Поиск пользователей...</Text>
-            ) : searchResults.length > 0 ? (
-              <View style={styles.resultsCard}>
-                {searchResults.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.resultRow}
-                    onPress={() => {
-                      setSelectedUser(item);
-                      setEmailQuery(item.email);
-                      setSearchResults([]);
-                    }}
-                  >
-                    <Text style={styles.resultEmail}>{item.email}</Text>
-                    <Text style={styles.resultName}>{item.full_name?.trim() || 'Без имени'}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : emailQuery.trim() ? (
-              <Text style={styles.searchHint}>Совпадений не найдено, можно отправить по точному email.</Text>
-            ) : null}
-          </>
-        )}
-
         <Text style={styles.label}>Заголовок push</Text>
         <TextInput
           style={styles.input}
@@ -223,7 +92,7 @@ export default function AdminPushScreen() {
         />
 
         <TouchableOpacity style={[styles.saveButton, saving && styles.disabled]} onPress={handleSendPush} disabled={saving}>
-          <Text style={styles.saveText}>{saving ? 'Отправка...' : 'Отправить push'}</Text>
+          <Text style={styles.saveText}>{saving ? 'Отправка...' : 'Отправить всем'}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -248,35 +117,6 @@ const createStyles = () =>
       color: Colors.darkGray,
     },
     textarea: { minHeight: 120, textAlignVertical: 'top' },
-    segmentedWrap: {
-      backgroundColor: Colors.lightPrimary,
-      borderRadius: 10,
-      padding: 4,
-      flexDirection: 'row',
-      gap: 8,
-    },
-    segmentedButton: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-    segmentedButtonActive: { backgroundColor: Colors.primary },
-    segmentedText: { color: Colors.darkGray, fontWeight: '600' },
-    segmentedTextActive: { color: Colors.onPrimary },
-    selectedHint: { marginTop: 8, fontSize: 12, color: Colors.primary, fontWeight: '600' },
-    searchHint: { marginTop: 8, fontSize: 12, color: Colors.gray },
-    resultsCard: {
-      marginTop: 8,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      borderRadius: 10,
-      overflow: 'hidden',
-    },
-    resultRow: {
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: Colors.border,
-      backgroundColor: Colors.white,
-    },
-    resultEmail: { fontSize: 14, color: Colors.darkGray, fontWeight: '600' },
-    resultName: { marginTop: 2, fontSize: 12, color: Colors.gray },
     saveButton: { marginTop: 16, backgroundColor: Colors.primary, borderRadius: 10, alignItems: 'center', padding: 14 },
     saveText: { color: Colors.onPrimary, fontWeight: '600', fontSize: 16 },
     disabled: { opacity: 0.7 },
