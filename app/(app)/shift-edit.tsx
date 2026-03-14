@@ -21,6 +21,7 @@ import { loadHolidayDateSet } from '@/services/holidays';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import { defaultBonusSettings, loadBonusSettings } from '@/services/bonusSettings';
 import { defaultTaxSettings, loadTaxSettings } from '@/services/taxSettings';
+import { deleteShiftOfflineAware, getShiftByIdOffline, saveShiftOfflineAware } from '@/services/offlineShifts';
 
 type ShiftEntity = {
     id: string;
@@ -80,16 +81,26 @@ export default function ShiftEditScreen() {
         setScreenLoading(true);
         try {
             if (shiftId) {
-                const { data, error } = await supabase
-                    .from('shifts')
-                    .select('*')
-                    .eq('id', shiftId)
-                    .eq('user_id', user.id)
-                    .single();
+                let loadedShift: ShiftEntity | null = null;
 
-                if (error) throw error;
+                try {
+                    const { data, error } = await supabase
+                        .from('shifts')
+                        .select('*')
+                        .eq('id', shiftId)
+                        .eq('user_id', user.id)
+                        .single();
 
-                const loadedShift = data as ShiftEntity;
+                    if (error) throw error;
+                    loadedShift = data as ShiftEntity;
+                } catch {
+                    loadedShift = await getShiftByIdOffline(user.id, shiftId) as ShiftEntity | null;
+                }
+
+                if (!loadedShift) {
+                    throw new Error('Не удалось загрузить смену (нет интернета и кэша).');
+                }
+
                 setFormData({
                     date: loadedShift.date,
                     startTime: normalizeTime(loadedShift.start_time),
@@ -204,21 +215,22 @@ export default function ShiftEditScreen() {
                 notes: formData.notes,
             };
 
-            if (isEdit && shiftId) {
-                const { error } = await supabase
-                    .from('shifts')
-                    .update(shiftData)
-                    .eq('id', shiftId)
-                    .eq('user_id', user.id);
-                if (error) throw error;
-                Alert.alert('Успешно', 'Смена обновлена');
-            } else {
-                const { error } = await supabase
-                    .from('shifts')
-                    .insert([shiftData]);
+            const result = await saveShiftOfflineAware({
+                userId: user.id,
+                isEdit,
+                shiftId,
+                shiftData: {
+                    ...shiftData,
+                    earnings: grossEarnings,
+                },
+            });
 
-                if (error) throw error;
-                Alert.alert('Успешно', 'Смена добавлена');
+            if (result.queued) {
+                Alert.alert('Офлайн режим', isEdit
+                    ? 'Изменения сохранены локально и отправятся при появлении интернета.'
+                    : 'Смена сохранена локально и отправится при появлении интернета.');
+            } else {
+                Alert.alert('Успешно', isEdit ? 'Смена обновлена' : 'Смена добавлена');
             }
 
             await syncNextShiftWidgetForUser(user.id);
@@ -243,12 +255,10 @@ export default function ShiftEditScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            const { error } = await supabase
-                                .from('shifts')
-                                .delete()
-                                .eq('id', shiftId)
-                                .eq('user_id', user.id);
-                            if (error) throw error;
+                            const result = await deleteShiftOfflineAware({ userId: user.id, shiftId });
+                            if (result.queued) {
+                                Alert.alert('Офлайн режим', 'Удаление сохранено локально и отправится при появлении интернета.');
+                            }
                             await syncNextShiftWidgetForUser(user.id);
                             router.back();
                         } catch (error: any) {
