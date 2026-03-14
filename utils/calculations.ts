@@ -1,4 +1,4 @@
-import { format, parse, differenceInMinutes } from 'date-fns';
+import { parse } from 'date-fns';
 
 /**
  * Расчет заработка за смену
@@ -27,20 +27,12 @@ export const calculateDuration = (
         const start = parse(startTime, 'HH:mm', new Date());
         const end = parse(endTime, 'HH:mm', new Date());
 
-        // Если время окончания раньше времени начала (ночная смена)
-        if (end < start) {
-            const endOfDay = parse('23:59', 'HH:mm', new Date());
-            const startOfDay = parse('00:00', 'HH:mm', new Date());
+        const startMinutes = start.getHours() * 60 + start.getMinutes();
+        const endMinutes = end.getHours() * 60 + end.getMinutes();
+        const durationInMinutes = endMinutes >= startMinutes
+            ? endMinutes - startMinutes
+            : (24 * 60 - startMinutes) + endMinutes;
 
-            const durationBeforeMidnight = differenceInMinutes(endOfDay, start) + 1; // +1 минута до 00:00
-            const durationAfterMidnight = differenceInMinutes(end, startOfDay);
-
-            const totalHours = (durationBeforeMidnight + durationAfterMidnight) / 60;
-            const breakHours = Math.max(0, breakMinutes) / 60;
-            return Math.max(0, totalHours - breakHours);
-        }
-
-        const durationInMinutes = differenceInMinutes(end, start);
         const totalHours = durationInMinutes / 60;
         const breakHours = Math.max(0, breakMinutes) / 60;
         return Math.max(0, totalHours - breakHours);
