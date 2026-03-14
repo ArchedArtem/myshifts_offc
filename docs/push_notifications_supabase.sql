@@ -6,7 +6,7 @@ begin;
 create table if not exists public.device_push_tokens (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  expo_push_token text not null unique,
+  expo_push_token text not null,
   platform text null,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
@@ -26,6 +26,9 @@ create table if not exists public.admin_push_logs (
 
 create index if not exists idx_device_push_tokens_user_id on public.device_push_tokens(user_id);
 create index if not exists idx_device_push_tokens_active on public.device_push_tokens(is_active);
+
+create unique index if not exists ux_device_push_tokens_user_token
+  on public.device_push_tokens(user_id, expo_push_token);
 create index if not exists idx_admin_push_logs_created_at on public.admin_push_logs(created_at desc);
 
 alter table public.device_push_tokens enable row level security;
