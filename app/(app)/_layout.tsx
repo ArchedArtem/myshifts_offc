@@ -15,9 +15,19 @@ export default function AppLayout() {
     useEffect(() => {
         if (!session?.user?.id) return;
         showLatestUnreadAnnouncement(session.user.id);
-        syncPushTokenForUser(session.user.id).catch(() => {
-            // Не блокируем приложение, если сеть недоступна или push временно не синхронизирован.
-        });
+
+        const runPushSync = async () => {
+            try {
+                const result = await syncPushTokenForUser(session.user.id);
+                if (!result.ok && result.reason) {
+                    console.warn('Push token sync skipped:', result.reason);
+                }
+            } catch {
+                // Не блокируем приложение, если сеть недоступна или push временно не синхронизирован.
+            }
+        };
+
+        runPushSync();
     }, [session?.user?.id]);
 
     if (loading) {

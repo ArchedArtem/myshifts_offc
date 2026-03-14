@@ -112,7 +112,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const signOut = async () => {
         try {
             const { error } = await supabase.auth.signOut();
-            if (error) throw error;
+            const errorMessage = (error as any)?.message || '';
+            const isMissingSession = errorMessage.toLowerCase().includes('auth session missing');
+
+            // В Expo Go/после долгого простоя локальная сессия может уже отсутствовать.
+            // Это состояние для выхода считаем успешным, просто очищаем локальный state.
+            if (error && !isMissingSession) throw error;
 
             setSession(null);
             setUser(null);

@@ -15,7 +15,9 @@ export type PushTargetUser = {
 const getExpoProjectId = (): string | undefined => {
   const easProjectId = Constants?.expoConfig?.extra?.eas?.projectId;
   const legacyProjectId = Constants?.easConfig?.projectId;
-  return easProjectId || legacyProjectId;
+  const manifestProjectId = (Constants as any)?.manifest2?.extra?.eas?.projectId
+    || (Constants as any)?.manifest?.extra?.eas?.projectId;
+  return easProjectId || legacyProjectId || manifestProjectId;
 };
 
 const toChunks = <T>(items: T[], chunkSize: number): T[][] => {
@@ -41,15 +43,13 @@ export const registerDevicePushToken = async (
 ): Promise<{ ok: boolean; reason?: string; token?: string }> => {
   try {
     const projectId = getExpoProjectId();
-    if (!projectId) {
-      return { ok: false, reason: 'Не найден EAS projectId для push-токена.' };
-    }
-
-    const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId });
+    const tokenResult = projectId
+      ? await Notifications.getExpoPushTokenAsync({ projectId })
+      : await Notifications.getExpoPushTokenAsync();
     const token = normalizeToken(tokenResult?.data);
 
     if (!token) {
-      return { ok: false, reason: 'Не удалось получить корректный push-токен.' };
+      return { ok: false, reason: 'Не удалось получить корректный push-токен. Проверьте, что это dev/release-сборка (не web) и разрешения выданы.' };
     }
 
     const { error } = await supabase.from('device_push_tokens').upsert(
