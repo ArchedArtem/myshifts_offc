@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
+import { ru } from 'date-fns/locale';
 import { Platform } from 'react-native';
 import {
   FlexWidget,
@@ -17,12 +18,14 @@ const NEXT_SHIFT_WIDGET_STORAGE_KEY = '@myshifts_next_shift_widget_v1';
 type NextShiftWidgetState = {
   headline: string;
   value: string;
+  details: string;
   updatedAt: string;
 };
 
 const DEFAULT_WIDGET_STATE: NextShiftWidgetState = {
   headline: 'Ближайшая смена',
   value: 'Нет ближайшей смены',
+  details: 'Добавьте смену, чтобы увидеть расписание.',
   updatedAt: '—',
 };
 
@@ -31,24 +34,55 @@ let widgetTaskRegistered = false;
 const normalizeTime = (time: string) => time?.split(':').slice(0, 2).join(':') || '--:--';
 
 function buildWidget(state: NextShiftWidgetState): WidgetRepresentation {
+  const hasShift = state.value !== 'Нет ближайшей смены' && state.value !== 'Войдите в аккаунт';
+
   return (
     <FlexWidget
       clickAction="OPEN_APP"
       style={{
         height: 'match_parent',
         width: 'match_parent',
-        padding: 16,
-        backgroundColor: '#E6F0FF',
-        borderRadius: 16,
-        justifyContent: 'center',
+        padding: 14,
+        backgroundColor: '#0F172A',
+        borderRadius: 20,
+        justifyContent: 'space-between',
       }}
     >
-      <TextWidget text="Мои смены" style={{ color: '#0B5ED7', fontSize: 14, fontWeight: '700' }} />
-      <TextWidget text={state.headline} style={{ marginTop: 8, color: '#3F4A5A', fontSize: 13 }} />
-      <TextWidget text={state.value} style={{ marginTop: 4, color: '#0F172A', fontSize: 22, fontWeight: '700' }} maxLines={2} />
+      <FlexWidget
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          backgroundColor: '#1E293B',
+          borderRadius: 14,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+        }}
+      >
+        <TextWidget text="Мои смены" style={{ color: '#93C5FD', fontSize: 11, fontWeight: '700' }} />
+        <TextWidget
+          text={hasShift ? '● Запланировано' : '● Нет смен'}
+          style={{ color: hasShift ? '#86EFAC' : '#FDBA74', fontSize: 11, fontWeight: '700' }}
+        />
+      </FlexWidget>
+
+      <FlexWidget
+        style={{
+          marginTop: 10,
+          backgroundColor: '#111827',
+          borderRadius: 16,
+          paddingHorizontal: 12,
+          paddingVertical: 12,
+        }}
+      >
+        <TextWidget text={state.headline} style={{ color: '#94A3B8', fontSize: 12, fontWeight: '500' }} maxLines={1} />
+        <TextWidget text={state.value} style={{ marginTop: 6, color: '#F8FAFC', fontSize: 18, fontWeight: '700' }} maxLines={2} />
+        <TextWidget text={state.details} style={{ marginTop: 5, color: '#CBD5E1', fontSize: 12 }} truncate="END" maxLines={1} />
+      </FlexWidget>
+
       <TextWidget
-        text={`Обновлено: ${state.updatedAt}`}
-        style={{ marginTop: 8, color: '#3F4A5A', fontSize: 12 }}
+        text={`Обновлено ${state.updatedAt}`}
+        style={{ marginTop: 10, color: '#64748B', fontSize: 11 }}
         truncate="END"
         maxLines={1}
       />
@@ -61,12 +95,13 @@ async function getStoredWidgetState(): Promise<NextShiftWidgetState> {
     const raw = await AsyncStorage.getItem(NEXT_SHIFT_WIDGET_STORAGE_KEY);
     if (!raw) return DEFAULT_WIDGET_STATE;
 
-    const parsed = JSON.parse(raw) as NextShiftWidgetState;
+    const parsed = JSON.parse(raw) as Partial<NextShiftWidgetState>;
     if (!parsed?.value) return DEFAULT_WIDGET_STATE;
 
     return {
       headline: parsed.headline || DEFAULT_WIDGET_STATE.headline,
       value: parsed.value || DEFAULT_WIDGET_STATE.value,
+      details: parsed.details || DEFAULT_WIDGET_STATE.details,
       updatedAt: parsed.updatedAt || DEFAULT_WIDGET_STATE.updatedAt,
     };
   } catch {
@@ -124,11 +159,13 @@ export async function syncNextShiftWidgetForUser(userId: string): Promise<void> 
     ? {
         headline: 'Ближайшая смена',
         value: `${format(new Date(`${nearest.date}T00:00:00`), 'dd.MM')} с ${normalizeTime(nearest.start_time)} до ${normalizeTime(nearest.end_time)}`,
+        details: `${format(new Date(`${nearest.date}T00:00:00`), 'EEEE', { locale: ru })} • ${Math.max(0, Math.round((new Date(`${nearest.date}T00:00:00`).getTime() - new Date(today).getTime()) / 86400000))} дн. до начала`,
         updatedAt: format(new Date(), 'dd.MM HH:mm'),
       }
     : {
         headline: 'Ближайшая смена',
         value: 'Нет ближайшей смены',
+        details: 'Добавьте смену, чтобы увидеть расписание.',
         updatedAt: format(new Date(), 'dd.MM HH:mm'),
       };
 
@@ -142,6 +179,7 @@ export async function clearNextShiftWidgetState(): Promise<void> {
   await saveWidgetState({
     headline: 'Ближайшая смена',
     value: 'Войдите в аккаунт',
+    details: 'Авторизуйтесь, чтобы синхронизировать данные.',
     updatedAt: format(new Date(), 'dd.MM HH:mm'),
   });
 
