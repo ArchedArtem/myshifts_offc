@@ -29,6 +29,17 @@ type QueueOp = {
   created_at: string;
 };
 
+const sanitizeShiftPayloadForServer = (payload: Record<string, unknown>) => {
+  const clean = { ...payload };
+  // В БД earnings вычисляется/ограничивается, не отправляем вручную.
+  delete clean.earnings;
+  delete clean.id;
+  delete clean.is_pending;
+  delete clean.created_at;
+  delete clean.updated_at;
+  return clean;
+};
+
 const isNetworkError = (error: unknown): boolean => {
   const message = String((error as any)?.message || '').toLowerCase();
   return (
@@ -114,9 +125,7 @@ export const syncPendingShiftOps = async (userId: string): Promise<{ synced: num
 
     try {
       if (op.type === 'create') {
-        const payload = { ...op.payload } as Record<string, unknown>;
-        delete payload.id;
-        delete payload.is_pending;
+        const payload = sanitizeShiftPayloadForServer({ ...(op.payload as Record<string, unknown>) });
 
         const { data, error } = await supabase
           .from('shifts')
@@ -135,9 +144,7 @@ export const syncPendingShiftOps = async (userId: string): Promise<{ synced: num
       }
 
       if (op.type === 'update') {
-        const payload = { ...op.payload } as Record<string, unknown>;
-        delete payload.id;
-        delete payload.is_pending;
+        const payload = sanitizeShiftPayloadForServer({ ...(op.payload as Record<string, unknown>) });
         const { error } = await supabase
           .from('shifts')
           .update(payload)
@@ -246,7 +253,7 @@ export const saveShiftOfflineAware = async (params: {
     try {
       const { error } = await supabase
         .from('shifts')
-        .update(params.shiftData)
+        .update(sanitizeShiftPayloadForServer(params.shiftData as unknown as Record<string, unknown>))
         .eq('id', params.shiftId)
         .eq('user_id', params.userId);
       if (error) throw error;
@@ -281,7 +288,7 @@ export const saveShiftOfflineAware = async (params: {
   try {
     const { data, error } = await supabase
       .from('shifts')
-      .insert([params.shiftData])
+      .insert([sanitizeShiftPayloadForServer(params.shiftData as unknown as Record<string, unknown>)])
       .select('*')
       .single();
 

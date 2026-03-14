@@ -3,6 +3,7 @@ import { supabase } from '@/services/supabase/client';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const PUSH_CHUNK_SIZE = 100;
+const FALLBACK_EAS_PROJECT_ID = '52d9d50f-e763-4f74-9637-2c5779f27750';
 
 export type PushAudienceMode = 'all' | 'single';
 
@@ -17,7 +18,13 @@ const getExpoProjectId = (): string | undefined => {
   const legacyProjectId = Constants?.easConfig?.projectId;
   const manifestProjectId = (Constants as any)?.manifest2?.extra?.eas?.projectId
     || (Constants as any)?.manifest?.extra?.eas?.projectId;
-  return easProjectId || legacyProjectId || manifestProjectId;
+  return easProjectId || legacyProjectId || manifestProjectId || FALLBACK_EAS_PROJECT_ID;
+};
+
+const getProjectCandidates = () => {
+  const projectId = getExpoProjectId();
+  const candidates = [projectId, FALLBACK_EAS_PROJECT_ID].filter((value): value is string => !!value);
+  return Array.from(new Set(candidates));
 };
 
 const toChunks = <T>(items: T[], chunkSize: number): T[][] => {
@@ -42,14 +49,34 @@ export const registerDevicePushToken = async (
   userId: string,
 ): Promise<{ ok: boolean; reason?: string; token?: string }> => {
   try {
-    const projectId = getExpoProjectId();
-    const tokenResult = projectId
-      ? await Notifications.getExpoPushTokenAsync({ projectId })
-      : await Notifications.getExpoPushTokenAsync();
-    const token = normalizeToken(tokenResult?.data);
+    const projectCandidates = getProjectCandidates();
+    let token: string | null = null;
+    let lastErrorMessage = '';
+
+    for (const projectId of projectCandidates) {
+      try {
+        const tokenResult = await Notifications.getExpoPushTokenAsync({ projectId });
+        token = normalizeToken(tokenResult?.data);
+        if (token) break;
+      } catch (error: any) {
+        lastErrorMessage = error?.message || '';
+      }
+    }
 
     if (!token) {
-      return { ok: false, reason: 'Не удалось получить корректный push-токен. Проверьте, что это dev/release-сборка (не web) и разрешения выданы.' };
+      try {
+        const fallbackResult = await Notifications.getExpoPushTokenAsync();
+        token = normalizeToken(fallbackResult?.data);
+      } catch (error: any) {
+        lastErrorMessage = error?.message || lastErrorMessage;
+      }
+    }
+
+    if (!token) {
+      return {
+        ok: false,
+        reason: `Не удалось получить корректный push-токен. Проверьте, что это dev/release-сборка (не web), и что разрешения выданы.${lastErrorMessage ? ` Причина: ${lastErrorMessage}` : ''}`,
+      };
     }
 
     const { error } = await supabase.from('device_push_tokens').upsert(
