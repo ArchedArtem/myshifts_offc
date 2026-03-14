@@ -87,7 +87,7 @@ export const registerDevicePushToken = async (
         is_active: true,
       },
       {
-        onConflict: 'expo_push_token',
+        onConflict: 'user_id,expo_push_token',
         ignoreDuplicates: false,
       },
     );
