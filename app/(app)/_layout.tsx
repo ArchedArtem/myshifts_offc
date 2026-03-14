@@ -15,7 +15,9 @@ export default function AppLayout() {
     useEffect(() => {
         if (!session?.user?.id) return;
         showLatestUnreadAnnouncement(session.user.id);
-        syncPushTokenForUser(session.user.id);
+        syncPushTokenForUser(session.user.id).catch(() => {
+            // Не блокируем приложение, если сеть недоступна или push временно не синхронизирован.
+        });
     }, [session?.user?.id]);
 
     if (loading) {

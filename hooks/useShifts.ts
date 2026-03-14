@@ -44,13 +44,13 @@ export function useShifts(userId?: string) {
             setLoading(true);
             setError(null);
 
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Пользователь не авторизован');
+            const resolvedUserId = userId || (await supabase.auth.getSession()).data.session?.user?.id;
+            if (!resolvedUserId) throw new Error('Пользователь не авторизован');
 
             const targetDate = date || new Date();
             const start = format(startOfMonth(targetDate), 'yyyy-MM-dd');
             const end = format(endOfMonth(targetDate), 'yyyy-MM-dd');
-            const payload = await getShiftsWithOffline({ userId: user.id, start, end });
+            const payload = await getShiftsWithOffline({ userId: resolvedUserId, start, end });
             setShifts(payload.shifts as Shift[]);
         } catch (err: any) {
             setError(err.message);
@@ -58,7 +58,7 @@ export function useShifts(userId?: string) {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [userId]);
 
     const addShift = useCallback(async (
         shiftData: Omit<Shift, 'id' | 'user_id' | 'created_at' | 'updated_at'>

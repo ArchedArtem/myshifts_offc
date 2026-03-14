@@ -113,19 +113,27 @@ export default function ShiftEditScreen() {
                 return;
             }
 
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('default_hourly_rate')
-                .eq('id', user.id)
-                .single();
+            try {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('default_hourly_rate')
+                    .eq('id', user.id)
+                    .single();
 
-            setFormData((prev) => ({
-                ...prev,
-                date: dateParam || format(new Date(), 'yyyy-MM-dd'),
-                hourlyRate: profile?.default_hourly_rate
-                    ? String(profile.default_hourly_rate)
-                    : prev.hourlyRate,
-            }));
+                setFormData((prev) => ({
+                    ...prev,
+                    date: dateParam || format(new Date(), 'yyyy-MM-dd'),
+                    hourlyRate: profile?.default_hourly_rate
+                        ? String(profile.default_hourly_rate)
+                        : prev.hourlyRate,
+                }));
+            } catch {
+                // Офлайн: просто оставляем значения по умолчанию/текущие.
+                setFormData((prev) => ({
+                    ...prev,
+                    date: dateParam || format(new Date(), 'yyyy-MM-dd'),
+                }));
+            }
         } catch (error: any) {
             Alert.alert('Ошибка', error.message || 'Не удалось загрузить данные смены');
             if (shiftId) {

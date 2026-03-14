@@ -186,6 +186,10 @@ export const getShiftsWithOffline = async (params: {
   start: string;
   end: string;
 }): Promise<{ shifts: ShiftBase[]; fromCache: boolean; pendingCount: number }> => {
+  if (!params.userId) {
+    return { shifts: [], fromCache: true, pendingCount: 0 };
+  }
+
   const cached = (await getUserShifts(params.userId)).filter((row) => row.date >= params.start && row.date <= params.end);
 
   try {
@@ -212,11 +216,7 @@ export const getShiftsWithOffline = async (params: {
       fromCache: false,
       pendingCount: await getPendingOpsCount(params.userId),
     };
-  } catch (error) {
-    if (!isNetworkError(error)) {
-      throw error;
-    }
-
+  } catch {
     return {
       shifts: cached,
       fromCache: true,
@@ -236,6 +236,10 @@ export const saveShiftOfflineAware = async (params: {
   shiftId?: string;
   shiftData: Omit<ShiftBase, 'id' | 'is_pending'>;
 }): Promise<{ queued: boolean; shiftId: string }> => {
+  if (!params.userId) {
+    throw new Error('Пользователь не авторизован');
+  }
+
   const cache = await getUserShifts(params.userId);
 
   if (params.isEdit && params.shiftId) {
@@ -307,6 +311,10 @@ export const deleteShiftOfflineAware = async (params: {
   userId: string;
   shiftId: string;
 }): Promise<{ queued: boolean }> => {
+  if (!params.userId) {
+    throw new Error('Пользователь не авторизован');
+  }
+
   const cache = await getUserShifts(params.userId);
 
   try {
