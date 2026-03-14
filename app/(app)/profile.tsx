@@ -166,9 +166,14 @@ export default function ProfileScreen() {
                     <Text style={styles.menuItemText}>❓ Помощь</Text>
                 </TouchableOpacity>
                 {isAdmin && (
-                    <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./admin-notifications')}>
-                        <Text style={styles.menuItemText}>📣 Админ-панель уведомлений</Text>
-                    </TouchableOpacity>
+                    <>
+                        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./admin-notifications')}>
+                            <Text style={styles.menuItemText}>📣 Админ-панель уведомлений</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./admin-push')}>
+                            <Text style={styles.menuItemText}>🚀 Админ-панель push</Text>
+                        </TouchableOpacity>
+                    </>
                 )}
                 <TouchableOpacity style={styles.menuItemLast} onPress={() => router.push('./documents')}>
                     <Text style={styles.menuItemText}>📚 Документы</Text>
