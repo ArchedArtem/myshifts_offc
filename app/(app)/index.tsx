@@ -15,7 +15,6 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { addMonths, format, startOfMonth, endOfMonth } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { supabase } from '@/services/supabase/client';
 import ShiftCard from '@/components/ShiftCard';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,6 +23,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import { loadHolidayDateSet } from '@/services/holidays';
 import { defaultTaxSettings, loadTaxSettings } from '@/services/taxSettings';
+import { deleteShiftOfflineAware, getShiftsWithOffline } from '@/services/offlineShifts';
 
 
 LocaleConfig.locales.ru = {
@@ -60,6 +60,8 @@ export default function CalendarScreen() {
     const [calendarKey, setCalendarKey] = useState(0);
     const [calendarOpacity] = useState(new Animated.Value(1));
     const [calendarTranslateX] = useState(new Animated.Value(0));
+    const [offlineMode, setOfflineMode] = useState(false);
+    const [pendingOps, setPendingOps] = useState(0);
 
     const router = useRouter();
     const { user } = useAuth();
@@ -105,21 +107,15 @@ export default function CalendarScreen() {
             const start = format(startOfMonth(selectedDate), 'yyyy-MM-dd');
             const end = format(endOfMonth(selectedDate), 'yyyy-MM-dd');
 
-            const [{ data, error }, holidays, taxSettings] = await Promise.all([
-                supabase
-                    .from('shifts')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .gte('date', start)
-                    .lte('date', end)
-                    .order('date', { ascending: false })
-                    .order('start_time', { ascending: true }),
+            const [shiftPayload, holidays, taxSettings] = await Promise.all([
+                getShiftsWithOffline({ userId: user.id, start, end }),
                 loadHolidayDateSet(),
                 loadTaxSettings(),
             ]);
 
-            if (error) throw error;
-            setShifts((data as Shift[]) ?? []);
+            setShifts((shiftPayload.shifts as Shift[]) ?? []);
+            setOfflineMode(shiftPayload.fromCache);
+            setPendingOps(shiftPayload.pendingCount);
             setHolidayDateSet(holidays);
             setIncludeNdfl(taxSettings.includeNdfl);
         } catch (error) {
@@ -212,15 +208,15 @@ export default function CalendarScreen() {
                 style: 'destructive',
                 onPress: async () => {
                     try {
-                        const { error } = await supabase
-                            .from('shifts')
-                            .delete()
-                            .eq('id', selectedShift.id)
-                            .eq('user_id', user?.id);
-
-                        if (error) throw error;
+                        const result = await deleteShiftOfflineAware({
+                            userId: user?.id || '',
+                            shiftId: selectedShift.id,
+                        });
 
                         setSelectedShift(null);
+                        if (result.queued) {
+                            Alert.alert('Офлайн режим', 'Удаление сохранено локально и отправится при появлении интернета.');
+                        }
                         if (user?.id) {
                             await syncNextShiftWidgetForUser(user.id);
                         }
@@ -277,6 +273,15 @@ export default function CalendarScreen() {
                     markingType="custom"
                 />
             </Animated.View>
+
+            {(offlineMode || pendingOps > 0) && (
+                <View style={styles.offlineBadge}>
+                    <Text style={styles.offlineBadgeText}>
+                        {offlineMode ? 'Офлайн режим: показываем сохраненные смены.' : 'Есть несинхронизированные изменения.'}
+                        {pendingOps > 0 ? ` В очереди: ${pendingOps}.` : ''}
+                    </Text>
+                </View>
+            )}
 
 
             <View style={{ padding: 16, backgroundColor: Colors.white }}>
@@ -495,6 +500,22 @@ const createStyles = () => StyleSheet.create({
         marginTop: 2,
         fontSize: 11,
         color: Colors.gray,
+    },
+    offlineBadge: {
+        marginHorizontal: 16,
+        marginTop: 8,
+        marginBottom: 4,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        backgroundColor: '#FEF3C7',
+        borderWidth: 1,
+        borderColor: '#F59E0B',
+        borderRadius: 8,
+    },
+    offlineBadgeText: {
+        fontSize: 12,
+        color: '#92400E',
+        fontWeight: '600',
     },
     monthPickerCard: {
         backgroundColor: Colors.white,

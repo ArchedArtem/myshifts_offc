@@ -82,7 +82,10 @@ export const AuthService = {
     signOut: async (): Promise<void> => {
         const { error } = await supabase.auth.signOut();
 
-        if (error) {
+        const errorMessage = (error as any)?.message || '';
+        const isMissingSession = errorMessage.toLowerCase().includes('auth session missing');
+
+        if (error && !isMissingSession) {
             throw new Error(`Ошибка выхода: ${error.message}`);
         }
     },
