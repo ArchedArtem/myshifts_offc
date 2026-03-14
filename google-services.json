@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "829877231274",
+    "project_id": "myshifts-1572a",
+    "storage_bucket": "myshifts-1572a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:829877231274:android:5f6e0723625139ca3ffad3",
+        "android_client_info": {
+          "package_name": "com.rasthartem.myshifts"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC1hAr43vpSatLvLeTpgsCCOuV8DtOzW-E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
