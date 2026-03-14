@@ -31,7 +31,7 @@ export default function HelpScreen() {
   const styles = createStyles();
 
   const openEmail = async () => {
-    const url = 'mailto:support@myshifts.ru?subject=MyShifts%20Support';
+    const url = 'mailto:support@myshifts.ru?subject=Поддержка%20"Мои смены"';
 
     try {
       await Linking.openURL(url);

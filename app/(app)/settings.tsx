@@ -109,8 +109,8 @@ export default function SettingsScreen() {
       <Text style={styles.label}>Имя</Text>
       <TextInput style={styles.input} value={form.full_name} onChangeText={(v) => setForm((p) => ({ ...p, full_name: v }))} placeholder="Введите имя" />
 
-      <Text style={styles.label}>Телефон</Text>
-      <TextInput style={styles.input} value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} placeholder="+7..." keyboardType="phone-pad" />
+      {/*<Text style={styles.label}>Телефон</Text>*/}
+      {/*<TextInput style={styles.input} value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} placeholder="+7..." keyboardType="phone-pad" />*/}
 
       <Text style={styles.label}>Email</Text>
       <TextInput style={styles.input} value={form.email} onChangeText={(v) => setForm((p) => ({ ...p, email: v }))} placeholder="example@mail.ru" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
