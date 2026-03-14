@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { ActivityIndicator, View } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { showLatestUnreadAnnouncement } from '@/services/inAppNotifications';
+import { syncPushTokenForUser } from '@/services/notifications';
 
 export default function AppLayout() {
     const { session, loading } = useAuth();
@@ -14,6 +15,9 @@ export default function AppLayout() {
     useEffect(() => {
         if (!session?.user?.id) return;
         showLatestUnreadAnnouncement(session.user.id);
+        syncPushTokenForUser(session.user.id).catch(() => {
+            // Не блокируем приложение, если сеть недоступна или push временно не синхронизирован.
+        });
     }, [session?.user?.id]);
 
     if (loading) {
@@ -84,6 +88,7 @@ export default function AppLayout() {
             <Tabs.Screen name="widgets" options={{ href: null }} />
             <Tabs.Screen name="documents" options={{ href: null }} />
             <Tabs.Screen name="admin-notifications" options={{ href: null }} />
+            <Tabs.Screen name="admin-push" options={{ href: null }} />
         </Tabs>
     );
 }
