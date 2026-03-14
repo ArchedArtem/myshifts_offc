@@ -14,7 +14,9 @@ import { supabase } from '@/services/supabase/client';
 import Colors from '@/constants/Colors';
 import { useTheme } from '@/hooks/useTheme';
 
+
 const SUPPORT_URL = 'https://myshifts.ru/support.html';
+const ADMIN_EMAIL = 'archedartem@gmail.com'; // поменять здесь при необходимости
 
 async function openExternalUrl(url: string, errorTitle: string): Promise<void> {
     const supported = await Linking.canOpenURL(url);
@@ -110,6 +112,7 @@ export default function ProfileScreen() {
 
     const hasName = !!profile.full_name.trim();
     const avatarChar = (hasName ? profile.full_name : profile.email)?.[0]?.toUpperCase() || 'U';
+    const isAdmin = (user?.email || '').toLowerCase() === ADMIN_EMAIL;
 
     return (
         <ScrollView style={styles.screen}>
@@ -162,6 +165,11 @@ export default function ProfileScreen() {
                 <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./help')}>
                     <Text style={styles.menuItemText}>❓ Помощь</Text>
                 </TouchableOpacity>
+                {isAdmin && (
+                    <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./admin-notifications')}>
+                        <Text style={styles.menuItemText}>📣 Админ-панель уведомлений</Text>
+                    </TouchableOpacity>
+                )}
                 <TouchableOpacity style={styles.menuItemLast} onPress={() => router.push('./documents')}>
                     <Text style={styles.menuItemText}>📚 Документы</Text>
                 </TouchableOpacity>
