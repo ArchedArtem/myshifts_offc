@@ -1,13 +1,20 @@
+import React, { useEffect } from 'react';
 import { Tabs, Redirect } from 'expo-router';
 import { Calendar, BarChart3, User } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
 import { ActivityIndicator, View } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
+import { showLatestUnreadAnnouncement } from '@/services/inAppNotifications';
 
 export default function AppLayout() {
     const { session, loading } = useAuth();
     const { theme } = useTheme();
+
+    useEffect(() => {
+        if (!session?.user?.id) return;
+        showLatestUnreadAnnouncement(session.user.id);
+    }, [session?.user?.id]);
 
     if (loading) {
         return (
@@ -76,6 +83,7 @@ export default function AppLayout() {
             <Tabs.Screen name="help" options={{ href: null }} />
             <Tabs.Screen name="widgets" options={{ href: null }} />
             <Tabs.Screen name="documents" options={{ href: null }} />
+            <Tabs.Screen name="admin-notifications" options={{ href: null }} />
         </Tabs>
     );
 }
