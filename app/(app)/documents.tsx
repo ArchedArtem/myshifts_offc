@@ -1,23 +1,12 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/hooks/useTheme';
 import Colors from '@/constants/Colors';
 
-const PRIVACY_URL = 'https://myshifts.ru/privacy.html';
-const TERMS_URL = 'https://myshifts.ru/terms.html';
-
-async function openExternalUrl(url: string, errorTitle: string): Promise<void> {
-  const supported = await Linking.canOpenURL(url);
-  if (!supported) {
-    Alert.alert('Ошибка', errorTitle);
-    return;
-  }
-
-  await Linking.openURL(url);
-}
-
 export default function DocumentsScreen() {
   useTheme();
+  const router = useRouter();
   const styles = createStyles();
 
   return (
@@ -28,21 +17,21 @@ export default function DocumentsScreen() {
       <TouchableOpacity
         style={styles.card}
         onPress={() => {
-          void openExternalUrl(PRIVACY_URL, 'Не удалось открыть Политику конфиденциальности');
+          router.push('/legal?doc=privacy');
         }}
       >
         <Text style={styles.cardTitle}>🔒 Политика конфиденциальности</Text>
-        <Text style={styles.cardUrl}>{PRIVACY_URL}</Text>
+        <Text style={styles.cardUrl}>Открыть в приложении</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.card}
         onPress={() => {
-          void openExternalUrl(TERMS_URL, 'Не удалось открыть Пользовательское соглашение');
+          router.push('/legal?doc=terms');
         }}
       >
         <Text style={styles.cardTitle}>📄 Пользовательское соглашение</Text>
-        <Text style={styles.cardUrl}>{TERMS_URL}</Text>
+        <Text style={styles.cardUrl}>Открыть в приложении</Text>
       </TouchableOpacity>
     </View>
   );
