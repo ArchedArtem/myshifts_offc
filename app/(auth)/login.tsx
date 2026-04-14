@@ -9,7 +9,6 @@ import {
     Platform,
     ActivityIndicator,
     StyleSheet,
-    Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
@@ -32,26 +31,12 @@ export default function LoginScreen() {
 
 
 
-    const openTerms = async () => {
-        const url = 'https://myshifts.ru/terms.html';
-        const supported = await Linking.canOpenURL(url);
-        if (!supported) {
-            Alert.alert('Ошибка', 'Не удалось открыть Пользовательское соглашение');
-            return;
-        }
-
-        await Linking.openURL(url);
+    const openTerms = () => {
+        router.push('/legal?doc=terms');
     };
 
-    const openPrivacy = async () => {
-        const url = 'https://myshifts.ru/privacy.html';
-        const supported = await Linking.canOpenURL(url);
-        if (!supported) {
-            Alert.alert('Ошибка', 'Не удалось открыть Политику конфиденциальности');
-            return;
-        }
-
-        await Linking.openURL(url);
+    const openPrivacy = () => {
+        router.push('/legal?doc=privacy');
     };
 
     const handleSendOTP = async () => {
