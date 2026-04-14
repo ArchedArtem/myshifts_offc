@@ -19,7 +19,6 @@ import { applyNdfl, calculateEarnings } from '@/utils/calculations';
 import { ShiftTemplate, getAllShiftTemplates } from '@/services/shiftTemplates';
 import { loadHolidayDateSet } from '@/services/holidays';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
-import { defaultBonusSettings, loadBonusSettings } from '@/services/bonusSettings';
 import { defaultTaxSettings, loadTaxSettings } from '@/services/taxSettings';
 import { deleteShiftOfflineAware, getShiftByIdOffline, saveShiftOfflineAware } from '@/services/offlineShifts';
 
@@ -41,7 +40,6 @@ const getSingleParam = (value: string | string[] | undefined): string | undefine
 
 const normalizeTime = (time: string) => time.split(':').slice(0, 2).join(':');
 const isValidTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
-const HOLIDAY_SHIFT_BONUS = 50;
 
 const formatTimeInput = (value: string) => {
     const digits = value.replace(/[^0-9]/g, "").slice(0, 4);
@@ -70,7 +68,6 @@ export default function ShiftEditScreen() {
     const [screenLoading, setScreenLoading] = useState(false);
     const [shiftTemplates, setShiftTemplates] = useState<ShiftTemplate[]>([]);
     const [holidayDateSet, setHolidayDateSet] = useState<Set<string>>(new Set());
-    const [bonusSystemEnabled, setBonusSystemEnabled] = useState(defaultBonusSettings.bonusSystemEnabled);
     const [includeNdfl, setIncludeNdfl] = useState(defaultTaxSettings.includeNdfl);
     const router = useRouter();
     const { user } = useAuth();
@@ -155,17 +152,15 @@ export default function ShiftEditScreen() {
             let mounted = true;
 
             const loadTemplates = async () => {
-                const [templates, holidays, bonusSettings, taxSettings] = await Promise.all([
+                const [templates, holidays, taxSettings] = await Promise.all([
                     getAllShiftTemplates(user?.id),
                     loadHolidayDateSet(),
-                    loadBonusSettings(),
                     loadTaxSettings(),
                 ]);
 
                 if (mounted) {
                     setShiftTemplates(templates);
                     setHolidayDateSet(holidays);
-                    setBonusSystemEnabled(bonusSettings.bonusSystemEnabled);
                     setIncludeNdfl(taxSettings.includeNdfl);
                 }
             };
@@ -191,7 +186,7 @@ export default function ShiftEditScreen() {
 
     const isHolidayShift = holidayDateSet.has(formData.date);
     const holidayPremium = isHolidayShift
-        ? grossEarnings + (bonusSystemEnabled ? HOLIDAY_SHIFT_BONUS : 0)
+        ? grossEarnings
         : 0;
     const totalWithHoliday = applyNdfl(grossEarnings + holidayPremium, includeNdfl);
 
@@ -455,7 +450,6 @@ export default function ShiftEditScreen() {
                         <Text style={{ color: Colors.darkGray, fontSize: 14, fontWeight: '600' }}>🎉 Праздничный день: действует двойная ставка</Text>
                         <Text style={{ color: Colors.gray, fontSize: 13, marginTop: 6 }}>
                             Доплата за двойную ставку: +{holidayPremium.toFixed(2)} ₽
-                            {bonusSystemEnabled ? ' (включая +50 ₽ за праздничную смену)' : ''}
                         </Text>
                         <Text style={{ color: Colors.primary, fontSize: 15, fontWeight: '700', marginTop: 6 }}>Итого с двойной ставкой: {totalWithHoliday.toFixed(2)} ₽</Text>
                     </View>

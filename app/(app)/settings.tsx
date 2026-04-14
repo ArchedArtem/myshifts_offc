@@ -132,66 +132,28 @@ export default function SettingsScreen() {
           />
         </View>
 
-        <Text style={styles.bonusTitle}>Система премий (для работников ВиТ)</Text>
+        <Text style={styles.bonusTitle}>Работник «Вкусно — и точка»</Text>
 
         <View style={styles.row}>
           <View style={styles.rowTextWrap}>
-            <Text style={styles.rowTitle}>Включить систему премий</Text>
-            <Text style={styles.rowDescription}>Начислять премии автоматически в статистике</Text>
+            <Text style={styles.rowTitle}>Работник «Вкусно — и точка»</Text>
+            <Text style={styles.rowDescription}>Включает специальный расчет бонусов и выплат в статистике</Text>
           </View>
           <Switch
-            value={bonusSettings.bonusSystemEnabled}
+            value={bonusSettings.isVkusnoWorker}
             onValueChange={(value) =>
               setBonusSettings((prev) => ({
                 ...prev,
-                bonusSystemEnabled: value,
-                ...(value ? {} : { fullTimeAvailabilityBonusEnabled: false, anyAvailabilityBonusEnabled: false }),
+                isVkusnoWorker: value,
               }))
             }
-            thumbColor={bonusSettings.bonusSystemEnabled ? Colors.primary : '#f4f3f4'}
+            thumbColor={bonusSettings.isVkusnoWorker ? Colors.primary : '#f4f3f4'}
             trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
           />
         </View>
-
-        {bonusSettings.bonusSystemEnabled && (
-          <>
-            <View style={styles.row}>
-              <View style={styles.rowTextWrap}>
-                <Text style={styles.rowTitle}>Полные временные возможности</Text>
-                <Text style={styles.rowDescription}>35ч/нед + смена в сб/вс = +10 000 ₽</Text>
-              </View>
-              <Switch
-                value={bonusSettings.fullTimeAvailabilityBonusEnabled}
-                onValueChange={(value) => setBonusSettings((prev) => ({
-                  ...prev,
-                  fullTimeAvailabilityBonusEnabled: value,
-                  anyAvailabilityBonusEnabled: value ? false : prev.anyAvailabilityBonusEnabled,
-                }))}
-                thumbColor={bonusSettings.fullTimeAvailabilityBonusEnabled ? Colors.primary : '#f4f3f4'}
-                trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
-              />
-            </View>
-
-            <View style={[styles.row, styles.lastRow]}>
-              <View style={styles.rowTextWrap}>
-                <Text style={styles.rowTitle}>Любые временные возможности</Text>
-                <Text style={styles.rowDescription}>40ч/нед = +17 000 ₽</Text>
-              </View>
-              <Switch
-                value={bonusSettings.anyAvailabilityBonusEnabled}
-                onValueChange={(value) => setBonusSettings((prev) => ({
-                  ...prev,
-                  anyAvailabilityBonusEnabled: value,
-                  fullTimeAvailabilityBonusEnabled: value ? false : prev.fullTimeAvailabilityBonusEnabled,
-                }))}
-                thumbColor={bonusSettings.anyAvailabilityBonusEnabled ? Colors.primary : '#f4f3f4'}
-                trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
-              />
-            </View>
-
-            <Text style={styles.bonusMutualHint}>Можно выбрать только один тип недельной премии.</Text>
-          </>
-        )}
+        <Text style={styles.bonusMutualHint}>
+          Условия: при 120+ часах в месяц ставка повышается на 100 ₽/ч; при 168+ часах — доплата 12 000 ₽.
+        </Text>
       </View>
 
       <TouchableOpacity style={[styles.button, saving && styles.disabled]} onPress={handleSave} disabled={saving}>

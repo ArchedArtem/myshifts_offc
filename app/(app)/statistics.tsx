@@ -19,7 +19,6 @@ import {
     addMonths,
     addDays,
     parseISO,
-    startOfWeek,
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
@@ -43,9 +42,8 @@ type CalculatedStatistics = {
     totalHours: number;
     shiftCount: number;
     averagePerShift: number;
-    reliabilityBonus: number;
     anyAvailabilityBonus: number;
-    fullTimeAvailabilityBonus: number;
+    hourlyRateBonus: number;
     totalWithBonuses: number;
     bestWeekdayLabel: string;
     worstWeekdayLabel: string;
@@ -71,9 +69,8 @@ const defaultStats: CalculatedStatistics = {
     totalHours: 0,
     shiftCount: 0,
     averagePerShift: 0,
-    reliabilityBonus: 0,
     anyAvailabilityBonus: 0,
-    fullTimeAvailabilityBonus: 0,
+    hourlyRateBonus: 0,
     totalWithBonuses: 0,
     bestWeekdayLabel: '-',
     worstWeekdayLabel: '-',
@@ -99,12 +96,9 @@ const getShiftHours = (shift: Shift) => calculateDuration(
     shift.break ?? 0,
 );
 
-const HOLIDAY_SHIFT_BONUS = 50;
-
 const getShiftEarnings = (
     shift: Shift,
     holidayDateSet: Set<string>,
-    bonusSystemEnabled: boolean,
     includeNdfl: boolean,
 ) => {
     const gross = calculateEarnings(
@@ -115,9 +109,7 @@ const getShiftEarnings = (
         shift.break ?? 0,
     );
 
-    const grossWithHoliday = holidayDateSet.has(shift.date)
-        ? (gross * 2) + (bonusSystemEnabled ? HOLIDAY_SHIFT_BONUS : 0)
-        : gross;
+    const grossWithHoliday = holidayDateSet.has(shift.date) ? (gross * 2) : gross;
     return applyNdfl(grossWithHoliday, includeNdfl);
 };
 
@@ -147,22 +139,21 @@ export default function StatisticsScreen() {
         includeNdfl: boolean,
     ): CalculatedStatistics => {
         const baseEarnings = shifts.reduce(
-            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl),
+            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, includeNdfl),
             0,
         );
         const totalHours = shifts.reduce((sum, shift) => sum + getShiftHours(shift), 0);
         const shiftCount = shifts.length;
         const averagePerShift = shiftCount > 0 ? baseEarnings / shiftCount : 0;
 
-        let reliabilityBonus = 0;
         let anyAvailabilityBonus = 0;
-        let fullTimeAvailabilityBonus = 0;
+        let hourlyRateBonus = 0;
 
         const weekdayAggregate = new Map<number, { earnings: number; count: number }>();
 
         shifts.forEach((shift) => {
             const day = parseISO(shift.date).getDay();
-            const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl);
+            const shiftEarnings = getShiftEarnings(shift, holidayDateSet, includeNdfl);
             const record = weekdayAggregate.get(day) || { earnings: 0, count: 0 };
             record.earnings += shiftEarnings;
             record.count += 1;
@@ -186,63 +177,24 @@ export default function StatisticsScreen() {
             }
         });
 
-        if (withBonuses && loadedBonusSettings.bonusSystemEnabled) {
-            const monthlyMap = new Map<string, { earnings: number; hours: number }>();
-            const weeklyMap = new Map<string, { hours: number; hasWeekendShift: boolean }>();
-
-            shifts.forEach((shift) => {
-                const shiftDate = parseISO(shift.date);
-                const monthKey = format(shiftDate, 'yyyy-MM');
-                const weekKey = format(startOfWeek(shiftDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-
-                const shiftHours = getShiftHours(shift);
-                const shiftEarnings = getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, includeNdfl);
-
-                const monthRecord = monthlyMap.get(monthKey) || { earnings: 0, hours: 0 };
-                monthRecord.earnings += shiftEarnings;
-                monthRecord.hours += shiftHours;
-                monthlyMap.set(monthKey, monthRecord);
-
-                const weekRecord = weeklyMap.get(weekKey) || { hours: 0, hasWeekendShift: false };
-                weekRecord.hours += shiftHours;
-                const day = shiftDate.getDay();
-                if (day === 0 || day === 6) {
-                    weekRecord.hasWeekendShift = true;
-                }
-                weeklyMap.set(weekKey, weekRecord);
-            });
-
-            monthlyMap.forEach((monthData) => {
-                if (monthData.hours >= 50) {
-                    reliabilityBonus += monthData.earnings * 0.15;
-                }
-            });
-
-            weeklyMap.forEach((weekData) => {
-                if (loadedBonusSettings.anyAvailabilityBonusEnabled && weekData.hours >= 40) {
-                    anyAvailabilityBonus += applyNdfl(17000, includeNdfl);
-                }
-
-                if (
-                    loadedBonusSettings.fullTimeAvailabilityBonusEnabled
-                    && weekData.hours >= 35
-                    && weekData.hasWeekendShift
-                ) {
-                    fullTimeAvailabilityBonus += applyNdfl(10000, includeNdfl);
-                }
-            });
+        if (withBonuses && loadedBonusSettings.isVkusnoWorker) {
+            if (totalHours >= 168) {
+                anyAvailabilityBonus = applyNdfl(12000, includeNdfl);
+            }
+            if (totalHours >= 120) {
+                hourlyRateBonus = applyNdfl(totalHours * 100, includeNdfl);
+            }
         }
 
-        const totalWithBonuses = baseEarnings + reliabilityBonus + anyAvailabilityBonus + fullTimeAvailabilityBonus;
+        const totalWithBonuses = baseEarnings + anyAvailabilityBonus + hourlyRateBonus;
 
         return {
             baseEarnings,
             totalHours,
             shiftCount,
             averagePerShift,
-            reliabilityBonus,
             anyAvailabilityBonus,
-            fullTimeAvailabilityBonus,
+            hourlyRateBonus,
             totalWithBonuses,
             bestWeekdayLabel: bestDay === -1 ? '-' : `В среднем лучше всего зарабатываешь в ${weekdayNames[bestDay]}`,
             worstWeekdayLabel: worstDay === -1 ? '-' : `Наименьший средний доход — в ${weekdayNames[worstDay]}`,
@@ -310,7 +262,7 @@ export default function StatisticsScreen() {
                 const firstHalfEarnings = currentShifts
                     .filter((shift) => parseISO(shift.date).getDate() <= 15)
                     .reduce(
-                        (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, loadedBonusSettings.bonusSystemEnabled, taxSettings.includeNdfl),
+                        (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, taxSettings.includeNdfl),
                         0,
                     );
                 const secondHalfEarnings = Math.max(0, currentStats.baseEarnings - firstHalfEarnings);
@@ -332,8 +284,8 @@ export default function StatisticsScreen() {
                     },
                 });
 
-                const advanceDate = moveToFridayIfWeekend(new Date(monthPickerDate.getFullYear(), monthPickerDate.getMonth(), 27));
-                const salaryDate = moveToFridayIfWeekend(new Date(monthPickerDate.getFullYear(), monthPickerDate.getMonth() + 1, 12));
+                const advanceDate = moveToFridayIfWeekend(new Date(monthPickerDate.getFullYear(), monthPickerDate.getMonth(), 26));
+                const salaryDate = moveToFridayIfWeekend(new Date(monthPickerDate.getFullYear(), monthPickerDate.getMonth() + 1, 11));
 
                 setPayrollSummary({
                     advanceAmount,
@@ -524,20 +476,17 @@ export default function StatisticsScreen() {
                         </Text>
                     </View>
 
-                    {bonusSettings.bonusSystemEnabled && (
+                    {bonusSettings.isVkusnoWorker && (
                         <>
                             <View style={styles.bonusSection}>
                                 <Text style={styles.bonusSectionTitle}>Премии</Text>
                                 <Text style={styles.bonusRow}>
-                                    🔹 Надежность (50ч/мес, +15%): {statistics.reliabilityBonus.toFixed(2)} ₽
+                                    🔹 Любые временные возможности (168+ ч/мес): {statistics.anyAvailabilityBonus.toFixed(2)} ₽
                                 </Text>
                                 <Text style={styles.bonusRow}>
-                                    🔹 Любые временные возможности (+17 000 ₽/нед): {statistics.anyAvailabilityBonus.toFixed(2)} ₽
+                                    🔹 Бонус к ставке (120+ ч/мес, +100 ₽/ч): {statistics.hourlyRateBonus.toFixed(2)} ₽
                                 </Text>
-                                <Text style={styles.bonusRow}>
-                                    🔹 Полные временные возможности (+10 000 ₽/нед): {statistics.fullTimeAvailabilityBonus.toFixed(2)} ₽
-                                </Text>
-                                <Text style={styles.bonusInfo}>Система премий включена</Text>
+                                <Text style={styles.bonusInfo}>Расчет для работника «Вкусно — и точка» включен</Text>
 
                                 <View style={styles.totalCard}>
                                     <Text style={styles.totalLabel}>Итог с премиями</Text>
