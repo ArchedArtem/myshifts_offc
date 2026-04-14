@@ -1,6 +1,6 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -118,6 +118,7 @@ const termsSections = [
 export default function LegalScreen() {
   useTheme();
   const styles = createStyles();
+  const router = useRouter();
   const { doc } = useLocalSearchParams<{ doc?: string }>();
 
   const isTerms = doc === 'terms';
@@ -126,9 +127,19 @@ export default function LegalScreen() {
     ? 'Настоящее Пользовательское соглашение определяет условия использования мобильного приложения «Мои смены».'
     : 'Настоящая Политика конфиденциальности определяет порядок обработки и защиты персональных данных пользователей мобильного приложения и сайта «Мои смены».';
   const sections = isTerms ? termsSections : privacySections;
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/(auth)/login');
+  };
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.85}>
+        <Text style={styles.backButtonText}>← Назад</Text>
+      </TouchableOpacity>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.intro}>{intro}</Text>
 
@@ -147,6 +158,17 @@ export default function LegalScreen() {
 const createStyles = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   content: { padding: 16, paddingBottom: 30 },
+  backButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  backButtonText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
   title: { fontSize: 26, fontWeight: '800', color: Colors.darkGray, marginBottom: 10 },
   intro: { fontSize: 14, lineHeight: 21, color: Colors.gray, marginBottom: 12 },
   section: {
