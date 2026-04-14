@@ -60,7 +60,7 @@ const privacySections = [
     title: '7. Контакты',
     items: [
       'По всем вопросам, связанным с обработкой персональных данных:',
-      'Email: support@myshifts.ru',
+      'Email: archedartem@gmail.com',
     ],
   },
 ];

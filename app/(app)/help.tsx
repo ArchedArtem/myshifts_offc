@@ -31,14 +31,14 @@ export default function HelpScreen() {
   const styles = createStyles();
 
   const openEmail = async () => {
-    const url = 'mailto:support@myshifts.ru?subject=Поддержка%20"Мои смены"';
+    const url = 'mailto:archedartem@gmail.com?subject=Поддержка%20"Мои смены"';
 
     try {
       await Linking.openURL(url);
     } catch {
       Alert.alert(
         'Ошибка',
-        'Не удалось открыть почтовый клиент. Напишите нам вручную: support@myshifts.ru',
+        'Не удалось открыть почтовый клиент. Напишите нам вручную: archedartem@gmail.com',
       );
     }
   };
