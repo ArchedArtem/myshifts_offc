@@ -325,15 +325,32 @@ export const syncPendingShiftOps = async (userId: string): Promise<PendingShiftS
       if (op.type === 'create') {
         const payload = sanitizeShiftPayloadForServer({ ...(op.payload as Record<string, unknown>) });
 
-        const { data, error } = await supabase
-          .from('shifts')
-          .insert([payload])
-          .select('*')
-          .single();
+        const { data: existingData } = await supabase
+            .from('shifts')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('date', payload.date)
+            .eq('start_time', payload.start_time)
+            .eq('end_time', payload.end_time)
+            .limit(1);
 
-        if (error) throw error;
+        let dataToUse;
 
-        const serverId = String(data.id);
+        if (existingData && existingData.length > 0) {
+          dataToUse = existingData[0];
+        } else {
+          const { data, error } = await supabase
+              .from('shifts')
+              .insert([payload])
+              .select('*')
+              .single();
+
+          if (error) throw error;
+          dataToUse = data;
+        }
+
+        const serverId = String(dataToUse.id);
+
         for (let i = index + 1; i < ownQueue.length; i += 1) {
           if (ownQueue[i].shift_id === op.shift_id) {
             ownQueue[i] = {
@@ -345,7 +362,7 @@ export const syncPendingShiftOps = async (userId: string): Promise<PendingShiftS
 
         cache = cache.filter((row) => row.id !== op.shift_id);
         cache = upsertInCache(cache, {
-          ...(data as ShiftBase),
+          ...(dataToUse as ShiftBase),
           sync_state: 'synced',
           sync_error: null,
           is_pending: false,
@@ -356,10 +373,10 @@ export const syncPendingShiftOps = async (userId: string): Promise<PendingShiftS
       if (op.type === 'update') {
         const payload = sanitizeShiftPayloadForServer({ ...(op.payload as Record<string, unknown>) });
         const { error } = await supabase
-          .from('shifts')
-          .update(payload)
-          .eq('id', op.shift_id)
-          .eq('user_id', userId);
+            .from('shifts')
+            .update(payload)
+            .eq('id', op.shift_id)
+            .eq('user_id', userId);
 
         if (error) throw error;
 
@@ -369,10 +386,10 @@ export const syncPendingShiftOps = async (userId: string): Promise<PendingShiftS
 
       if (op.type === 'delete') {
         const { error } = await supabase
-          .from('shifts')
-          .delete()
-          .eq('id', op.shift_id)
-          .eq('user_id', userId);
+            .from('shifts')
+            .delete()
+            .eq('id', op.shift_id)
+            .eq('user_id', userId);
 
         if (error) throw error;
 
@@ -381,15 +398,19 @@ export const syncPendingShiftOps = async (userId: string): Promise<PendingShiftS
       }
 
       synced += 1;
+
+      const remainingOwn = ownQueue.slice(index + 1);
+      await saveQueue([...remainingOwn, ...otherUsers]);
+
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       const remainingOwn = ownQueue.slice(index).map((item, itemIndex) =>
-        itemIndex === 0
-          ? {
-              ...item,
-              last_error: errorMessage,
-            }
-          : item
+          itemIndex === 0
+              ? {
+                ...item,
+                last_error: errorMessage,
+              }
+              : item
       );
 
       await saveQueue([...remainingOwn, ...otherUsers]);
@@ -419,7 +440,6 @@ export const syncPendingShiftOps = async (userId: string): Promise<PendingShiftS
     }
   }
 
-  await saveQueue(otherUsers);
   return {
     ok: true,
     synced,
