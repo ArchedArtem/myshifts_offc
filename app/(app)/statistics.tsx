@@ -1,24 +1,25 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    View,
-    Text,
-    ScrollView,
-    TouchableOpacity,
-    RefreshControl,
-    Platform,
-    StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  Platform,
+  StyleSheet,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/services/supabase/client';
 import Colors from '@/constants/Colors';
 import {
-    format,
-    startOfMonth,
-    endOfMonth,
-    subMonths,
-    addMonths,
-    addDays,
-    parseISO,
+  addDays,
+  addMonths,
+  endOfMonth,
+  format,
+  getDate,
+  parseISO,
+  startOfMonth,
+  subMonths,
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
@@ -28,711 +29,717 @@ import { loadTaxSettings } from '@/services/taxSettings';
 import { useTheme } from '@/hooks/useTheme';
 import { loadHolidayDateSet } from '@/services/holidays';
 
+const DEFAULT_ADVANCE_DAY = 26;
+const DEFAULT_SALARY_DAY = 11;
+
 type Shift = {
-    date: string;
-    start_time: string;
-    end_time: string;
-    hourly_rate: number;
-    extra_payment: number;
-    break?: number | null;
+  date: string;
+  start_time: string;
+  end_time: string;
+  hourly_rate: number;
+  extra_payment: number;
+  break?: number | null;
 };
 
 type CalculatedStatistics = {
-    baseEarnings: number;
-    totalHours: number;
-    shiftCount: number;
-    averagePerShift: number;
-    anyAvailabilityBonus: number;
-    hourlyRateBonus: number;
-    totalWithBonuses: number;
-    bestWeekdayLabel: string;
-    worstWeekdayLabel: string;
+  baseEarnings: number;
+  totalHours: number;
+  shiftCount: number;
+  averagePerShift: number;
+  anyAvailabilityBonus: number;
+  hourlyRateBonus: number;
+  totalWithBonuses: number;
+  bestWeekdayLabel: string;
+  worstWeekdayLabel: string;
 };
 
 type MonthComparison = {
-    current: { earnings: number; hours: number; shifts: number; bonuses: number };
-    previous: { earnings: number; hours: number; shifts: number; bonuses: number };
+  current: { earnings: number; hours: number; shifts: number; bonuses: number };
+  previous: { earnings: number; hours: number; shifts: number; bonuses: number };
 };
 
 type PayrollSummary = {
-    advanceAmount: number;
-    salaryAmount: number;
-    advanceDate: Date;
-    salaryDate: Date;
-    firstHalfEarnings: number;
-    secondHalfEarnings: number;
-    monthlyBonuses: number;
+  advanceAmount: number;
+  salaryAmount: number;
+  advanceDate: Date;
+  salaryDate: Date;
+  firstHalfEarnings: number;
+  secondHalfEarnings: number;
+  monthlyBonuses: number;
+};
+
+type ProfilePayrollSettings = {
+  advance_day: number | null;
+  salary_day: number | null;
+  any_availability_bonus_amount: number | null;
+};
+
+type BonusSettingsWithAmount = BonusSettings & {
+  anyAvailabilityBonusAmount: number;
 };
 
 const defaultStats: CalculatedStatistics = {
-    baseEarnings: 0,
-    totalHours: 0,
-    shiftCount: 0,
-    averagePerShift: 0,
-    anyAvailabilityBonus: 0,
-    hourlyRateBonus: 0,
-    totalWithBonuses: 0,
-    bestWeekdayLabel: '-',
-    worstWeekdayLabel: '-',
+  baseEarnings: 0,
+  totalHours: 0,
+  shiftCount: 0,
+  averagePerShift: 0,
+  anyAvailabilityBonus: 0,
+  hourlyRateBonus: 0,
+  totalWithBonuses: 0,
+  bestWeekdayLabel: '-',
+  worstWeekdayLabel: '-',
 };
 
 const defaultComparison: MonthComparison = {
-    current: { earnings: 0, hours: 0, shifts: 0, bonuses: 0 },
-    previous: { earnings: 0, hours: 0, shifts: 0, bonuses: 0 },
+  current: { earnings: 0, hours: 0, shifts: 0, bonuses: 0 },
+  previous: { earnings: 0, hours: 0, shifts: 0, bonuses: 0 },
 };
 
 const moveToFridayIfWeekend = (date: Date) => {
-    const day = date.getDay();
-    if (day === 6) return addDays(date, -1);
-    if (day === 0) return addDays(date, -2);
-    return date;
+  const day = date.getDay();
+  if (day === 6) return addDays(date, -1);
+  if (day === 0) return addDays(date, -2);
+  return date;
 };
 
 const normalizeTime = (time: string) => time?.split(':').slice(0, 2).join(':');
 
-const getShiftHours = (shift: Shift) => calculateDuration(
+const getShiftHours = (shift: Shift) =>
+  calculateDuration(normalizeTime(shift.start_time), normalizeTime(shift.end_time), shift.break ?? 0);
+
+const getShiftEarnings = (shift: Shift, holidayDateSet: Set<string>, includeNdfl: boolean) => {
+  const gross = calculateEarnings(
     normalizeTime(shift.start_time),
     normalizeTime(shift.end_time),
-    shift.break ?? 0,
-);
+    shift.hourly_rate ?? 0,
+    shift.extra_payment ?? 0,
+    shift.break ?? 0
+  );
 
-const getShiftEarnings = (
-    shift: Shift,
-    holidayDateSet: Set<string>,
-    includeNdfl: boolean,
-) => {
-    const gross = calculateEarnings(
-        normalizeTime(shift.start_time),
-        normalizeTime(shift.end_time),
-        shift.hourly_rate ?? 0,
-        shift.extra_payment ?? 0,
-        shift.break ?? 0,
-    );
+  const grossWithHoliday = holidayDateSet.has(shift.date) ? gross * 2 : gross;
+  return applyNdfl(grossWithHoliday, includeNdfl);
+};
 
-    const grossWithHoliday = holidayDateSet.has(shift.date) ? (gross * 2) : gross;
-    return applyNdfl(grossWithHoliday, includeNdfl);
+const getClampedMonthDate = (year: number, month: number, preferredDay: number) => {
+  const lastDay = getDate(endOfMonth(new Date(year, month, 1)));
+  const safeDay = Math.max(1, Math.min(lastDay, preferredDay));
+  return moveToFridayIfWeekend(new Date(year, month, safeDay));
 };
 
 const weekdayNames = ['воскресенье', 'понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу'];
 
 export default function StatisticsScreen() {
-    const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'year' | 'all' | 'custom'>('month');
-    const [customStartDate, setCustomStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
-    const [customEndDate, setCustomEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-    const [showCustomStartPicker, setShowCustomStartPicker] = useState(false);
-    const [showCustomEndPicker, setShowCustomEndPicker] = useState(false);
-    const [monthPickerDate, setMonthPickerDate] = useState(new Date());
-    const [statistics, setStatistics] = useState<CalculatedStatistics>(defaultStats);
-    const [monthComparison, setMonthComparison] = useState<MonthComparison>(defaultComparison);
-    const [payrollSummary, setPayrollSummary] = useState<PayrollSummary | null>(null);
-    const [bonusSettings, setBonusSettings] = useState<BonusSettings>(defaultBonusSettings);
-    const [refreshing, setRefreshing] = useState(false);
-    const { user } = useAuth();
-    useTheme();
-    const styles = createStyles();
+  const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'year' | 'all' | 'custom'>('month');
+  const [customStartDate, setCustomStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [customEndDate, setCustomEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [showCustomStartPicker, setShowCustomStartPicker] = useState(false);
+  const [showCustomEndPicker, setShowCustomEndPicker] = useState(false);
+  const [monthPickerDate, setMonthPickerDate] = useState(new Date());
+  const [statistics, setStatistics] = useState<CalculatedStatistics>(defaultStats);
+  const [monthComparison, setMonthComparison] = useState<MonthComparison>(defaultComparison);
+  const [payrollSummary, setPayrollSummary] = useState<PayrollSummary | null>(null);
+  const [bonusSettings, setBonusSettings] = useState<BonusSettings>(defaultBonusSettings);
+  const [refreshing, setRefreshing] = useState(false);
+  const { user } = useAuth();
+  useTheme();
+  const styles = createStyles();
 
-    const computeStats = useCallback((
-        shifts: Shift[],
-        loadedBonusSettings: BonusSettings,
-        withBonuses: boolean,
-        holidayDateSet: Set<string>,
-        includeNdfl: boolean,
+  const computeStats = useCallback(
+    (
+      shifts: Shift[],
+      loadedBonusSettings: BonusSettingsWithAmount,
+      withBonuses: boolean,
+      holidayDateSet: Set<string>,
+      includeNdfl: boolean
     ): CalculatedStatistics => {
-        const baseEarnings = shifts.reduce(
-            (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, includeNdfl),
-            0,
-        );
-        const totalHours = shifts.reduce((sum, shift) => sum + getShiftHours(shift), 0);
-        const shiftCount = shifts.length;
-        const averagePerShift = shiftCount > 0 ? baseEarnings / shiftCount : 0;
+      const baseEarnings = shifts.reduce((sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, includeNdfl), 0);
+      const totalHours = shifts.reduce((sum, shift) => sum + getShiftHours(shift), 0);
+      const shiftCount = shifts.length;
+      const averagePerShift = shiftCount > 0 ? baseEarnings / shiftCount : 0;
 
-        let anyAvailabilityBonus = 0;
-        let hourlyRateBonus = 0;
+      let anyAvailabilityBonus = 0;
+      let hourlyRateBonus = 0;
 
-        const weekdayAggregate = new Map<number, { earnings: number; count: number }>();
+      const weekdayAggregate = new Map<number, { earnings: number; count: number }>();
 
-        shifts.forEach((shift) => {
-            const day = parseISO(shift.date).getDay();
-            const shiftEarnings = getShiftEarnings(shift, holidayDateSet, includeNdfl);
-            const record = weekdayAggregate.get(day) || { earnings: 0, count: 0 };
-            record.earnings += shiftEarnings;
-            record.count += 1;
-            weekdayAggregate.set(day, record);
+      shifts.forEach((shift) => {
+        const day = parseISO(shift.date).getDay();
+        const shiftEarnings = getShiftEarnings(shift, holidayDateSet, includeNdfl);
+        const record = weekdayAggregate.get(day) || { earnings: 0, count: 0 };
+        record.earnings += shiftEarnings;
+        record.count += 1;
+        weekdayAggregate.set(day, record);
+      });
+
+      let bestDay = -1;
+      let worstDay = -1;
+      let bestAvg = -Infinity;
+      let worstAvg = Infinity;
+
+      weekdayAggregate.forEach((value, day) => {
+        const avg = value.earnings / value.count;
+        if (avg > bestAvg) {
+          bestAvg = avg;
+          bestDay = day;
+        }
+        if (avg < worstAvg) {
+          worstAvg = avg;
+          worstDay = day;
+        }
+      });
+
+      if (withBonuses && loadedBonusSettings.isVkusnoWorker) {
+        if (loadedBonusSettings.anyAvailabilityBonusEnabled) {
+          const fixedBonusAmount = Math.max(0, loadedBonusSettings.anyAvailabilityBonusAmount ?? 0);
+          anyAvailabilityBonus = applyNdfl(fixedBonusAmount, includeNdfl);
+        }
+        if (loadedBonusSettings.hourlyRateBonusEnabled && totalHours >= 120) {
+          hourlyRateBonus = applyNdfl(totalHours * 100, includeNdfl);
+        }
+      }
+
+      const totalWithBonuses = baseEarnings + anyAvailabilityBonus + hourlyRateBonus;
+
+      return {
+        baseEarnings,
+        totalHours,
+        shiftCount,
+        averagePerShift,
+        anyAvailabilityBonus,
+        hourlyRateBonus,
+        totalWithBonuses,
+        bestWeekdayLabel: bestDay === -1 ? '-' : `В среднем лучше всего зарабатываешь в ${weekdayNames[bestDay]}`,
+        worstWeekdayLabel: worstDay === -1 ? '-' : `Наименьший средний доход — в ${weekdayNames[worstDay]}`,
+      };
+    },
+    []
+  );
+
+  const fetchStatistics = useCallback(async () => {
+    try {
+      if (!user) return;
+
+      let query = supabase.from('shifts').select('*').eq('user_id', user.id);
+
+      const now = new Date();
+
+      if (selectedPeriod === 'month') {
+        query = query
+          .gte('date', format(startOfMonth(monthPickerDate), 'yyyy-MM-dd'))
+          .lte('date', format(endOfMonth(monthPickerDate), 'yyyy-MM-dd'));
+      } else if (selectedPeriod === 'year') {
+        query = query
+          .gte('date', format(startOfMonth(subMonths(now, 11)), 'yyyy-MM-dd'))
+          .lte('date', format(endOfMonth(now), 'yyyy-MM-dd'));
+      } else if (selectedPeriod === 'custom') {
+        const startForCurrent = customStartDate <= customEndDate ? customStartDate : customEndDate;
+        const endForCurrent = customStartDate <= customEndDate ? customEndDate : customStartDate;
+        query = query.gte('date', startForCurrent).lte('date', endForCurrent);
+      }
+
+      const [{ data, error }, loadedBonusSettings, taxSettings, holidayDateSet, profileResponse] = await Promise.all([
+        query,
+        loadBonusSettings(),
+        loadTaxSettings(),
+        loadHolidayDateSet(),
+        supabase.from('profiles').select('advance_day, salary_day, any_availability_bonus_amount').eq('id', user.id).maybeSingle(),
+      ]);
+
+      if (error) throw error;
+      if (profileResponse.error) throw profileResponse.error;
+
+      const profileDays: ProfilePayrollSettings = profileResponse.data ?? {
+        advance_day: null,
+        salary_day: null,
+        any_availability_bonus_amount: null,
+      };
+      const advanceDay = Math.max(1, Math.min(31, profileDays.advance_day ?? DEFAULT_ADVANCE_DAY));
+      const salaryDay = Math.max(1, Math.min(31, profileDays.salary_day ?? DEFAULT_SALARY_DAY));
+      const anyAvailabilityBonusAmount = Math.max(0, profileDays.any_availability_bonus_amount ?? 12000);
+      const bonusSettingsWithProfileAmount: BonusSettingsWithAmount = {
+        ...loadedBonusSettings,
+        anyAvailabilityBonusAmount,
+      };
+
+      const currentShifts = (data || []) as Shift[];
+      setBonusSettings(loadedBonusSettings);
+      setStatistics(computeStats(currentShifts, bonusSettingsWithProfileAmount, selectedPeriod === 'month', holidayDateSet, taxSettings.includeNdfl));
+
+      if (selectedPeriod === 'month') {
+        const prevMonthDate = addMonths(monthPickerDate, -1);
+        const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd');
+        const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd');
+
+        const { data: prevData, error: prevError } = await supabase
+          .from('shifts')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('date', prevStart)
+          .lte('date', prevEnd);
+
+        if (prevError) throw prevError;
+
+        const prevStats = computeStats((prevData || []) as Shift[], bonusSettingsWithProfileAmount, true, holidayDateSet, taxSettings.includeNdfl);
+        const currentStats = computeStats(currentShifts, bonusSettingsWithProfileAmount, true, holidayDateSet, taxSettings.includeNdfl);
+
+        const monthlyBonuses = Math.max(0, currentStats.totalWithBonuses - currentStats.baseEarnings);
+        const firstHalfEarnings = currentShifts
+          .filter((shift) => parseISO(shift.date).getDate() <= 15)
+          .reduce((sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, taxSettings.includeNdfl), 0);
+        const secondHalfEarnings = Math.max(0, currentStats.baseEarnings - firstHalfEarnings);
+        const advanceAmount = firstHalfEarnings;
+        const salaryAmount = secondHalfEarnings + monthlyBonuses;
+
+        setMonthComparison({
+          current: {
+            earnings: currentStats.baseEarnings,
+            hours: currentStats.totalHours,
+            shifts: currentStats.shiftCount,
+            bonuses: monthlyBonuses,
+          },
+          previous: {
+            earnings: prevStats.baseEarnings,
+            hours: prevStats.totalHours,
+            shifts: prevStats.shiftCount,
+            bonuses: prevStats.totalWithBonuses - prevStats.baseEarnings,
+          },
         });
 
-        let bestDay = -1;
-        let worstDay = -1;
-        let bestAvg = -Infinity;
-        let worstAvg = Infinity;
+        const advanceDate = getClampedMonthDate(monthPickerDate.getFullYear(), monthPickerDate.getMonth(), advanceDay);
+        const salaryDate = getClampedMonthDate(monthPickerDate.getFullYear(), monthPickerDate.getMonth() + 1, salaryDay);
 
-        weekdayAggregate.forEach((value, day) => {
-            const avg = value.earnings / value.count;
-            if (avg > bestAvg) {
-                bestAvg = avg;
-                bestDay = day;
-            }
-            if (avg < worstAvg) {
-                worstAvg = avg;
-                worstDay = day;
-            }
+        setPayrollSummary({
+          advanceAmount,
+          salaryAmount,
+          advanceDate,
+          salaryDate,
+          firstHalfEarnings,
+          secondHalfEarnings,
+          monthlyBonuses,
         });
+      } else {
+        setMonthComparison(defaultComparison);
+        setPayrollSummary(null);
+      }
+    } catch (error) {
+      console.error('Error fetching statistics:', error);
+    }
+  }, [computeStats, customEndDate, customStartDate, monthPickerDate, selectedPeriod, user]);
 
-        if (withBonuses && loadedBonusSettings.isVkusnoWorker) {
-            if (totalHours >= 168) {
-                anyAvailabilityBonus = applyNdfl(12000, includeNdfl);
-            }
-            if (totalHours >= 120) {
-                hourlyRateBonus = applyNdfl(totalHours * 100, includeNdfl);
-            }
-        }
+  useEffect(() => {
+    fetchStatistics();
+  }, [fetchStatistics]);
 
-        const totalWithBonuses = baseEarnings + anyAvailabilityBonus + hourlyRateBonus;
+  const onCustomStartChange = (_event: any, date?: Date) => {
+    if (Platform.OS === 'android') setShowCustomStartPicker(false);
+    if (date) setCustomStartDate(format(date, 'yyyy-MM-dd'));
+  };
 
-        return {
-            baseEarnings,
-            totalHours,
-            shiftCount,
-            averagePerShift,
-            anyAvailabilityBonus,
-            hourlyRateBonus,
-            totalWithBonuses,
-            bestWeekdayLabel: bestDay === -1 ? '-' : `В среднем лучше всего зарабатываешь в ${weekdayNames[bestDay]}`,
-            worstWeekdayLabel: worstDay === -1 ? '-' : `Наименьший средний доход — в ${weekdayNames[worstDay]}`,
-        };
-    }, []);
+  const onCustomEndChange = (_event: any, date?: Date) => {
+    if (Platform.OS === 'android') setShowCustomEndPicker(false);
+    if (date) setCustomEndDate(format(date, 'yyyy-MM-dd'));
+  };
 
-    const fetchStatistics = useCallback(async () => {
-        try {
-            if (!user) return;
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: Colors.background }}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={async () => {
+            setRefreshing(true);
+            await fetchStatistics();
+            setRefreshing(false);
+          }}
+          tintColor={Colors.primary}
+        />
+      }
+    >
+      <View style={{ padding: 20, backgroundColor: Colors.primary }}>
+        <Text style={{ fontSize: 28, fontWeight: 'bold', color: Colors.onPrimary }}>Статистика</Text>
+      </View>
 
-            let query = supabase
-                .from('shifts')
-                .select('*')
-                .eq('user_id', user.id);
+      <View style={styles.periodGrid}>
+        {(['month', 'year', 'all', 'custom'] as const).map((period) => (
+          <TouchableOpacity
+            key={period}
+            style={[styles.periodButton, selectedPeriod === period && styles.periodButtonActive]}
+            onPress={() => setSelectedPeriod(period)}
+          >
+            <Text style={[styles.periodText, selectedPeriod === period && styles.periodTextActive]}>
+              {period === 'month' ? 'Месяц' : period === 'year' ? 'Год' : period === 'all' ? 'Все время' : 'Свой период'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
-            const now = new Date();
-            let startForCurrent = '';
-            let endForCurrent = '';
+      {selectedPeriod === 'month' && (
+        <View style={styles.monthSelectorWrap}>
+          <Text style={styles.monthSelectorLabel}>Выбранный месяц</Text>
+          <View style={styles.monthSelectorRow}>
+            <TouchableOpacity style={styles.monthArrowButton} onPress={() => setMonthPickerDate((prev) => addMonths(prev, -1))}>
+              <Text style={styles.monthArrowText}>‹</Text>
+            </TouchableOpacity>
 
-            if (selectedPeriod === 'month') {
-                startForCurrent = format(startOfMonth(monthPickerDate), 'yyyy-MM-dd');
-                endForCurrent = format(endOfMonth(monthPickerDate), 'yyyy-MM-dd');
-                query = query.gte('date', startForCurrent).lte('date', endForCurrent);
-            } else if (selectedPeriod === 'year') {
-                startForCurrent = format(startOfMonth(subMonths(now, 11)), 'yyyy-MM-dd');
-                endForCurrent = format(endOfMonth(now), 'yyyy-MM-dd');
-                query = query.gte('date', startForCurrent).lte('date', endForCurrent);
-            } else if (selectedPeriod === 'custom') {
-                startForCurrent = customStartDate <= customEndDate ? customStartDate : customEndDate;
-                endForCurrent = customStartDate <= customEndDate ? customEndDate : customStartDate;
-                query = query.gte('date', startForCurrent).lte('date', endForCurrent);
-            }
+            <View style={styles.monthTitleWrap}>
+              <Text style={styles.monthSelectorText}>{format(monthPickerDate, 'LLLL yyyy', { locale: ru })}</Text>
+            </View>
 
-            const [{ data, error }, loadedBonusSettings, taxSettings, holidayDateSet] = await Promise.all([
-                query,
-                loadBonusSettings(),
-                loadTaxSettings(),
-                loadHolidayDateSet(),
-            ]);
+            <TouchableOpacity style={styles.monthArrowButton} onPress={() => setMonthPickerDate((prev) => addMonths(prev, 1))}>
+              <Text style={styles.monthArrowText}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
-            if (error) throw error;
+      {selectedPeriod === 'custom' && (
+        <View style={styles.customRangeCard}>
+          <Text style={styles.customRangeLabel}>Выберите диапазон дат</Text>
+          <View style={styles.customRangeRow}>
+            <TouchableOpacity style={[styles.customRangeButton, styles.customRangeButtonLeft]} onPress={() => setShowCustomStartPicker(true)}>
+              <Text style={{ color: Colors.darkGray }}>С: {format(new Date(`${customStartDate}T00:00:00`), 'dd.MM.yyyy')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.customRangeButton} onPress={() => setShowCustomEndPicker(true)}>
+              <Text style={{ color: Colors.darkGray }}>По: {format(new Date(`${customEndDate}T00:00:00`), 'dd.MM.yyyy')}</Text>
+            </TouchableOpacity>
+          </View>
+          {showCustomStartPicker && <DateTimePicker value={new Date(`${customStartDate}T00:00:00`)} mode="date" onChange={onCustomStartChange} />}
+          {showCustomEndPicker && <DateTimePicker value={new Date(`${customEndDate}T00:00:00`)} mode="date" onChange={onCustomEndChange} />}
+        </View>
+      )}
 
-            const currentShifts = (data || []) as Shift[];
-            setBonusSettings(loadedBonusSettings);
-            setStatistics(computeStats(currentShifts, loadedBonusSettings, selectedPeriod === 'month', holidayDateSet, taxSettings.includeNdfl));
+      <View style={styles.statsGrid}>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{statistics.baseEarnings.toFixed(2)} ₽</Text>
+          <Text style={styles.statLabel}>База (без премий)</Text>
+        </View>
 
-            if (selectedPeriod === 'month') {
-                const prevMonthDate = addMonths(monthPickerDate, -1);
-                const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd');
-                const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd');
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{statistics.totalHours.toFixed(1)}</Text>
+          <Text style={styles.statLabel}>Всего часов</Text>
+        </View>
 
-                const { data: prevData, error: prevError } = await supabase
-                    .from('shifts')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .gte('date', prevStart)
-                    .lte('date', prevEnd);
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{statistics.shiftCount}</Text>
+          <Text style={styles.statLabel}>Количество смен</Text>
+        </View>
 
-                if (prevError) throw prevError;
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{statistics.averagePerShift.toFixed(2)} ₽</Text>
+          <Text style={styles.statLabel}>Среднее за смену</Text>
+        </View>
+      </View>
 
-                const prevStats = computeStats((prevData || []) as Shift[], loadedBonusSettings, true, holidayDateSet, taxSettings.includeNdfl);
-                const currentStats = computeStats(currentShifts, loadedBonusSettings, true, holidayDateSet, taxSettings.includeNdfl);
+      <View style={styles.dayInsightsCard}>
+        <Text style={styles.dayInsightsTitle}>Лучший/худший день недели</Text>
+        <Text style={styles.dayInsightLine}>Лучше: {statistics.bestWeekdayLabel}</Text>
+        <Text style={styles.dayInsightLine}>Слабее: {statistics.worstWeekdayLabel}</Text>
+      </View>
 
-                const monthlyBonuses = Math.max(0, currentStats.totalWithBonuses - currentStats.baseEarnings);
-                const firstHalfEarnings = currentShifts
-                    .filter((shift) => parseISO(shift.date).getDate() <= 15)
-                    .reduce(
-                        (sum, shift) => sum + getShiftEarnings(shift, holidayDateSet, taxSettings.includeNdfl),
-                        0,
-                    );
-                const secondHalfEarnings = Math.max(0, currentStats.baseEarnings - firstHalfEarnings);
-                const advanceAmount = firstHalfEarnings;
-                const salaryAmount = secondHalfEarnings + monthlyBonuses;
+      {selectedPeriod === 'month' && (
+        <>
+          <View style={styles.comparisonCard}>
+            <Text style={styles.comparisonTitle}>Сравнение месяцев</Text>
+            <Text style={styles.comparisonLine}>
+              Текущий: {monthComparison.current.earnings.toFixed(2)} ₽, {monthComparison.current.hours.toFixed(1)} ч, {monthComparison.current.shifts} смен
+            </Text>
+            <Text style={styles.comparisonLine}>
+              Прошлый: {monthComparison.previous.earnings.toFixed(2)} ₽, {monthComparison.previous.hours.toFixed(1)} ч, {monthComparison.previous.shifts} смен
+            </Text>
+            <Text style={styles.comparisonDelta}>
+              Δ Доход: {(monthComparison.current.earnings - monthComparison.previous.earnings).toFixed(2)} ₽ · Δ Часы:{' '}
+              {(monthComparison.current.hours - monthComparison.previous.hours).toFixed(1)}
+            </Text>
+          </View>
 
-                setMonthComparison({
-                    current: {
-                        earnings: currentStats.baseEarnings,
-                        hours: currentStats.totalHours,
-                        shifts: currentStats.shiftCount,
-                        bonuses: monthlyBonuses,
-                    },
-                    previous: {
-                        earnings: prevStats.baseEarnings,
-                        hours: prevStats.totalHours,
-                        shifts: prevStats.shiftCount,
-                        bonuses: prevStats.totalWithBonuses - prevStats.baseEarnings,
-                    },
-                });
-
-                const advanceDate = moveToFridayIfWeekend(new Date(monthPickerDate.getFullYear(), monthPickerDate.getMonth(), 26));
-                const salaryDate = moveToFridayIfWeekend(new Date(monthPickerDate.getFullYear(), monthPickerDate.getMonth() + 1, 11));
-
-                setPayrollSummary({
-                    advanceAmount,
-                    salaryAmount,
-                    advanceDate,
-                    salaryDate,
-                    firstHalfEarnings,
-                    secondHalfEarnings,
-                    monthlyBonuses,
-                });
-            } else {
-                setMonthComparison(defaultComparison);
-                setPayrollSummary(null);
-            }
-        } catch (error) {
-            console.error('Error fetching statistics:', error);
-        }
-    }, [computeStats, customEndDate, customStartDate, monthPickerDate, selectedPeriod, user]);
-
-    useEffect(() => {
-        fetchStatistics();
-    }, [fetchStatistics]);
-
-    const onCustomStartChange = (_event: any, date?: Date) => {
-        if (Platform.OS === 'android') setShowCustomStartPicker(false);
-        if (date) setCustomStartDate(format(date, 'yyyy-MM-dd'));
-    };
-
-    const onCustomEndChange = (_event: any, date?: Date) => {
-        if (Platform.OS === 'android') setShowCustomEndPicker(false);
-        if (date) setCustomEndDate(format(date, 'yyyy-MM-dd'));
-    };
-
-    return (
-        <ScrollView
-            style={{ flex: 1, backgroundColor: Colors.background }}
-            refreshControl={
-                <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={async () => {
-                        setRefreshing(true);
-                        await fetchStatistics();
-                        setRefreshing(false);
-                    }}
-                    tintColor={Colors.primary}
-                />
-            }
-        >
-            <View style={{ padding: 20, backgroundColor: Colors.primary }}>
-                <Text style={{ fontSize: 28, fontWeight: 'bold', color: Colors.onPrimary }}>
-                    Статистика
+          {bonusSettings.isVkusnoWorker && (
+            <>
+              <View style={styles.bonusSection}>
+                <Text style={styles.bonusSectionTitle}>Премии</Text>
+                <Text style={styles.bonusRow}>
+                  Любые временные возможности: {statistics.anyAvailabilityBonus.toFixed(2)} ₽
                 </Text>
-            </View>
+                <Text style={styles.bonusRow}>
+                  Бонус к ставке (120+ ч/мес, +100 ₽/ч): {statistics.hourlyRateBonus.toFixed(2)} ₽
+                </Text>
+                <Text style={styles.bonusInfo}>
+                  Фиксированная премия берется из суммы в настройках. Бонус +100 ₽/ч при 120+ часах тоже управляется отдельным тумблером.
+                </Text>
 
-            <View style={styles.periodGrid}>
-                {(['month', 'year', 'all', 'custom'] as const).map((period) => (
-                    <TouchableOpacity
-                        key={period}
-                        style={[
-                            styles.periodButton,
-                            selectedPeriod === period && styles.periodButtonActive,
-                        ]}
-                        onPress={() => setSelectedPeriod(period)}
-                    >
-                        <Text
-                            style={[
-                                styles.periodText,
-                                selectedPeriod === period && styles.periodTextActive,
-                            ]}
-                        >
-                            {period === 'month'
-                                ? 'Месяц'
-                                : period === 'year'
-                                    ? 'Год'
-                                    : period === 'all'
-                                        ? 'Все время'
-                                        : 'Свой период'}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
-            {selectedPeriod === 'month' && (
-                <View style={styles.monthSelectorWrap}>
-                    <Text style={styles.monthSelectorLabel}>Выбранный месяц</Text>
-                    <View style={styles.monthSelectorRow}>
-                        <TouchableOpacity
-                            style={styles.monthArrowButton}
-                            onPress={() => setMonthPickerDate((prev) => addMonths(prev, -1))}
-                        >
-                            <Text style={styles.monthArrowText}>‹</Text>
-                        </TouchableOpacity>
-
-                        <View style={styles.monthTitleWrap}>
-                            <Text style={styles.monthSelectorText}>
-                                {format(monthPickerDate, 'LLLL yyyy', { locale: ru })}
-                            </Text>
-                        </View>
-
-                        <TouchableOpacity
-                            style={styles.monthArrowButton}
-                            onPress={() => setMonthPickerDate((prev) => addMonths(prev, 1))}
-                        >
-                            <Text style={styles.monthArrowText}>›</Text>
-                        </TouchableOpacity>
-                    </View>
+                <View style={styles.totalCard}>
+                  <Text style={styles.totalLabel}>Итог с премиями</Text>
+                  <Text style={styles.totalValue}>{statistics.totalWithBonuses.toFixed(2)} ₽</Text>
                 </View>
-            )}
+              </View>
 
-            {selectedPeriod === 'custom' && (
-                <View style={{ backgroundColor: Colors.white, marginHorizontal: 16, marginTop: 12, borderRadius: 12, padding: 14 }}>
-                    <Text style={{ fontSize: 14, color: Colors.gray, marginBottom: 10 }}>Выберите диапазон дат</Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity
-                            style={{ flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10 }}
-                            onPress={() => setShowCustomStartPicker(true)}
-                        >
-                            <Text style={{ color: Colors.darkGray }}>С: {format(new Date(`${customStartDate}T00:00:00`), 'dd.MM.yyyy')}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={{ flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10 }}
-                            onPress={() => setShowCustomEndPicker(true)}
-                        >
-                            <Text style={{ color: Colors.darkGray }}>По: {format(new Date(`${customEndDate}T00:00:00`), 'dd.MM.yyyy')}</Text>
-                        </TouchableOpacity>
-                    </View>
-                    {showCustomStartPicker && (
-                        <DateTimePicker
-                            value={new Date(`${customStartDate}T00:00:00`)}
-                            mode="date"
-                            onChange={onCustomStartChange}
-                        />
-                    )}
-                    {showCustomEndPicker && (
-                        <DateTimePicker
-                            value={new Date(`${customEndDate}T00:00:00`)}
-                            mode="date"
-                            onChange={onCustomEndChange}
-                        />
-                    )}
-                </View>
-            )}
-
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 16 }}>
-                <View style={styles.statCard}>
-                    <Text style={styles.statValue}>
-                        {statistics.baseEarnings.toFixed(2)} ₽
+              <View style={styles.payrollCard}>
+                <Text style={styles.payrollTitle}>Аванс и зарплата</Text>
+                {payrollSummary ? (
+                  <>
+                    <Text style={styles.payrollLine}>
+                      Аванс: {payrollSummary.advanceAmount.toFixed(2)} ₽ · {format(payrollSummary.advanceDate, 'dd.MM.yyyy')}
                     </Text>
-                    <Text style={styles.statLabel}>База (без премий)</Text>
-                </View>
+                    <Text style={styles.payrollSubLine}>100% дохода за 1–15 число ({payrollSummary.firstHalfEarnings.toFixed(2)} ₽)</Text>
 
-                <View style={styles.statCard}>
-                    <Text style={styles.statValue}>
-                        {statistics.totalHours.toFixed(1)}
+                    <Text style={[styles.payrollLine, { marginTop: 10 }]}>
+                      Зарплата: {payrollSummary.salaryAmount.toFixed(2)} ₽ · {format(payrollSummary.salaryDate, 'dd.MM.yyyy')}
                     </Text>
-                    <Text style={styles.statLabel}>Всего часов</Text>
-                </View>
-
-                <View style={styles.statCard}>
-                    <Text style={styles.statValue}>
-                        {statistics.shiftCount}
+                    <Text style={styles.payrollSubLine}>
+                      Доход 16–конец ({payrollSummary.secondHalfEarnings.toFixed(2)} ₽) + премии ({payrollSummary.monthlyBonuses.toFixed(2)} ₽)
                     </Text>
-                    <Text style={styles.statLabel}>Количество смен</Text>
-                </View>
-
-                <View style={styles.statCard}>
-                    <Text style={styles.statValue}>
-                        {statistics.averagePerShift.toFixed(2)} ₽
-                    </Text>
-                    <Text style={styles.statLabel}>Среднее за смену</Text>
-                </View>
-            </View>
-
-            <View style={styles.dayInsightsCard}>
-                <Text style={styles.dayInsightsTitle}>Лучший/худший день недели</Text>
-                <Text style={styles.dayInsightLine}>✅ {statistics.bestWeekdayLabel}</Text>
-                <Text style={styles.dayInsightLine}>📉 {statistics.worstWeekdayLabel}</Text>
-            </View>
-
-            {selectedPeriod === 'month' && (
-                <>
-                    <View style={styles.comparisonCard}>
-                        <Text style={styles.comparisonTitle}>Сравнение месяцев</Text>
-                        <Text style={styles.comparisonLine}>Текущий: {monthComparison.current.earnings.toFixed(2)} ₽, {monthComparison.current.hours.toFixed(1)} ч, {monthComparison.current.shifts} смен</Text>
-                        <Text style={styles.comparisonLine}>Прошлый: {monthComparison.previous.earnings.toFixed(2)} ₽, {monthComparison.previous.hours.toFixed(1)} ч, {monthComparison.previous.shifts} смен</Text>
-                        <Text style={styles.comparisonDelta}>
-                            Δ Доход: {(monthComparison.current.earnings - monthComparison.previous.earnings).toFixed(2)} ₽ · Δ Часы: {(monthComparison.current.hours - monthComparison.previous.hours).toFixed(1)}
-                        </Text>
-                    </View>
-
-                    {bonusSettings.isVkusnoWorker && (
-                        <>
-                            <View style={styles.bonusSection}>
-                                <Text style={styles.bonusSectionTitle}>Премии</Text>
-                                <Text style={styles.bonusRow}>
-                                    🔹 Любые временные возможности (168+ ч/мес): {statistics.anyAvailabilityBonus.toFixed(2)} ₽
-                                </Text>
-                                <Text style={styles.bonusRow}>
-                                    🔹 Бонус к ставке (120+ ч/мес, +100 ₽/ч): {statistics.hourlyRateBonus.toFixed(2)} ₽
-                                </Text>
-                                <Text style={styles.bonusInfo}>Расчет для работника «Вкусно — и точка» включен</Text>
-
-                                <View style={styles.totalCard}>
-                                    <Text style={styles.totalLabel}>Итог с премиями</Text>
-                                    <Text style={styles.totalValue}>{statistics.totalWithBonuses.toFixed(2)} ₽</Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.payrollCard}>
-                                <Text style={styles.payrollTitle}>Аванс и зарплата</Text>
-                                {payrollSummary ? (
-                                    <>
-                                        <Text style={styles.payrollLine}>
-                                            Аванс: {payrollSummary.advanceAmount.toFixed(2)} ₽ · {format(payrollSummary.advanceDate, 'dd.MM.yyyy')}
-                                        </Text>
-                                        <Text style={styles.payrollSubLine}>
-                                            100% дохода за 1–15 число ({payrollSummary.firstHalfEarnings.toFixed(2)} ₽)
-                                        </Text>
-
-                                        <Text style={[styles.payrollLine, { marginTop: 10 }]}>
-                                            Зарплата: {payrollSummary.salaryAmount.toFixed(2)} ₽ · {format(payrollSummary.salaryDate, 'dd.MM.yyyy')}
-                                        </Text>
-                                        <Text style={styles.payrollSubLine}>
-                                            Доход 16–конец ({payrollSummary.secondHalfEarnings.toFixed(2)} ₽) + премии ({payrollSummary.monthlyBonuses.toFixed(2)} ₽)
-                                        </Text>
-                                        <Text style={styles.payrollHint}>Суммы рассчитаны с учетом текущей настройки НДФЛ и двойной ставки в праздники РФ.</Text>
-                                    </>
-                                ) : (
-                                    <Text style={styles.payrollSubLine}>Данные появятся при выборе периода «Месяц».</Text>
-                                )}
-                            </View>
-                        </>
-                    )}
-                </>
-            )}
-        </ScrollView>
-    );
+                    <Text style={styles.payrollHint}>Даты берутся из настроек профиля. Если число попадает на выходной, выплата переносится на пятницу.</Text>
+                  </>
+                ) : (
+                  <Text style={styles.payrollSubLine}>Данные появятся при выборе периода «Месяц».</Text>
+                )}
+              </View>
+            </>
+          )}
+        </>
+      )}
+    </ScrollView>
+  );
 }
 
-const createStyles = () => StyleSheet.create({
+const createStyles = () =>
+  StyleSheet.create({
     periodGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        backgroundColor: Colors.white,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      backgroundColor: Colors.white,
     },
     periodButton: {
-        width: '48%',
-        paddingVertical: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 10,
-        marginBottom: 10,
-        backgroundColor: 'transparent',
+      width: '48%',
+      paddingVertical: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 10,
+      marginBottom: 10,
+      backgroundColor: 'transparent',
     },
     periodButtonActive: {
-        backgroundColor: Colors.lightPrimary,
+      backgroundColor: Colors.lightPrimary,
     },
     periodText: {
-        fontSize: 14,
-        color: Colors.gray,
-        fontWeight: '500',
-        textAlign: 'center',
+      fontSize: 14,
+      color: Colors.gray,
+      fontWeight: '500',
+      textAlign: 'center',
     },
     periodTextActive: {
-        color: Colors.primary,
-        fontWeight: '700',
+      color: Colors.primary,
+      fontWeight: '700',
     },
     monthSelectorWrap: {
-        backgroundColor: Colors.white,
-        marginHorizontal: 16,
-        marginTop: 12,
-        borderRadius: 12,
-        padding: 14,
+      backgroundColor: Colors.white,
+      marginHorizontal: 16,
+      marginTop: 12,
+      borderRadius: 12,
+      padding: 14,
     },
     monthSelectorLabel: {
-        fontSize: 13,
-        color: Colors.gray,
-        marginBottom: 8,
+      fontSize: 13,
+      color: Colors.gray,
+      marginBottom: 8,
     },
     monthSelectorRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
+      flexDirection: 'row',
+      alignItems: 'center',
     },
     monthArrowButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: Colors.white,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: Colors.white,
     },
     monthArrowText: {
-        fontSize: 24,
-        color: Colors.primary,
-        lineHeight: 26,
+      fontSize: 24,
+      color: Colors.primary,
+      lineHeight: 26,
     },
     monthTitleWrap: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     monthSelectorText: {
-        fontSize: 16,
-        color: Colors.darkGray,
-        textTransform: 'capitalize',
+      fontSize: 16,
+      color: Colors.darkGray,
+      textTransform: 'capitalize',
+    },
+    customRangeCard: {
+      backgroundColor: Colors.white,
+      marginHorizontal: 16,
+      marginTop: 12,
+      borderRadius: 12,
+      padding: 14,
+    },
+    customRangeLabel: {
+      fontSize: 14,
+      color: Colors.gray,
+      marginBottom: 10,
+    },
+    customRangeRow: {
+      flexDirection: 'row',
+    },
+    customRangeButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      borderRadius: 8,
+      padding: 10,
+    },
+    customRangeButtonLeft: {
+      marginRight: 8,
+    },
+    statsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      padding: 16,
     },
     statCard: {
-        width: '48%',
-        backgroundColor: Colors.white,
-        borderRadius: 12,
-        padding: 16,
-        margin: '1%',
-        alignItems: 'center',
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+      width: '48%',
+      backgroundColor: Colors.white,
+      borderRadius: 12,
+      padding: 16,
+      margin: '1%',
+      alignItems: 'center',
+      elevation: 3,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
     },
     statValue: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: Colors.primary,
-        marginBottom: 8,
-        textAlign: 'center',
+      fontSize: 22,
+      fontWeight: 'bold',
+      color: Colors.primary,
+      marginBottom: 8,
+      textAlign: 'center',
     },
     statLabel: {
-        fontSize: 14,
-        color: Colors.gray,
-        textAlign: 'center',
+      fontSize: 14,
+      color: Colors.gray,
+      textAlign: 'center',
     },
     dayInsightsCard: {
-        marginHorizontal: 16,
-        marginBottom: 12,
-        padding: 14,
-        borderRadius: 12,
-        backgroundColor: Colors.white,
+      marginHorizontal: 16,
+      marginBottom: 12,
+      padding: 14,
+      borderRadius: 12,
+      backgroundColor: Colors.white,
     },
     dayInsightsTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.darkGray,
-        marginBottom: 8,
+      fontSize: 16,
+      fontWeight: '700',
+      color: Colors.darkGray,
+      marginBottom: 8,
     },
     dayInsightLine: {
-        fontSize: 14,
-        color: Colors.darkGray,
-        marginBottom: 4,
+      fontSize: 14,
+      color: Colors.darkGray,
+      marginBottom: 4,
     },
     comparisonCard: {
-        marginHorizontal: 16,
-        marginBottom: 12,
-        padding: 14,
-        borderRadius: 12,
-        backgroundColor: Colors.white,
+      marginHorizontal: 16,
+      marginBottom: 12,
+      padding: 14,
+      borderRadius: 12,
+      backgroundColor: Colors.white,
     },
     comparisonTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Colors.darkGray,
-        marginBottom: 8,
+      fontSize: 16,
+      fontWeight: '700',
+      color: Colors.darkGray,
+      marginBottom: 8,
     },
     comparisonLine: {
-        fontSize: 14,
-        color: Colors.darkGray,
-        marginBottom: 4,
+      fontSize: 14,
+      color: Colors.darkGray,
+      marginBottom: 4,
     },
     comparisonDelta: {
-        marginTop: 4,
-        fontSize: 13,
-        color: Colors.gray,
+      marginTop: 4,
+      fontSize: 13,
+      color: Colors.gray,
     },
     bonusSection: {
-        marginHorizontal: 16,
-        marginBottom: 24,
-        padding: 16,
-        borderRadius: 12,
-        backgroundColor: Colors.white,
+      marginHorizontal: 16,
+      marginBottom: 24,
+      padding: 16,
+      borderRadius: 12,
+      backgroundColor: Colors.white,
     },
     bonusSectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.darkGray,
-        marginBottom: 10,
+      fontSize: 18,
+      fontWeight: '700',
+      color: Colors.darkGray,
+      marginBottom: 10,
     },
     bonusRow: {
-        fontSize: 14,
-        color: Colors.darkGray,
-        marginBottom: 8,
+      fontSize: 14,
+      color: Colors.darkGray,
+      marginBottom: 8,
     },
     bonusInfo: {
-        marginTop: 2,
-        marginBottom: 10,
-        fontSize: 12,
-        color: Colors.gray,
+      marginTop: 2,
+      marginBottom: 10,
+      fontSize: 12,
+      color: Colors.gray,
     },
     totalCard: {
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
-        paddingTop: 10,
-        marginTop: 4,
+      borderTopWidth: 1,
+      borderTopColor: Colors.border,
+      paddingTop: 10,
+      marginTop: 4,
     },
     totalLabel: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: Colors.darkGray,
+      fontSize: 15,
+      fontWeight: '600',
+      color: Colors.darkGray,
     },
     totalValue: {
-        marginTop: 4,
-        fontSize: 24,
-        fontWeight: '700',
-        color: Colors.primary,
+      marginTop: 4,
+      fontSize: 24,
+      fontWeight: '700',
+      color: Colors.primary,
     },
     payrollCard: {
-        marginHorizontal: 16,
-        marginBottom: 28,
-        padding: 16,
-        borderRadius: 12,
-        backgroundColor: Colors.white,
+      marginHorizontal: 16,
+      marginBottom: 28,
+      padding: 16,
+      borderRadius: 12,
+      backgroundColor: Colors.white,
     },
     payrollTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: Colors.darkGray,
-        marginBottom: 10,
+      fontSize: 18,
+      fontWeight: '700',
+      color: Colors.darkGray,
+      marginBottom: 10,
     },
     payrollLine: {
-        fontSize: 15,
-        color: Colors.darkGray,
-        fontWeight: '600',
+      fontSize: 15,
+      color: Colors.darkGray,
+      fontWeight: '600',
     },
     payrollSubLine: {
-        marginTop: 4,
-        fontSize: 13,
-        color: Colors.gray,
-        lineHeight: 18,
+      marginTop: 4,
+      fontSize: 13,
+      color: Colors.gray,
+      lineHeight: 18,
     },
     payrollHint: {
-        marginTop: 10,
-        fontSize: 12,
-        color: Colors.gray,
-        lineHeight: 17,
+      marginTop: 10,
+      fontSize: 12,
+      color: Colors.gray,
+      lineHeight: 17,
     },
-});
+  });

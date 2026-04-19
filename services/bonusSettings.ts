@@ -4,10 +4,14 @@ export const BONUS_SETTINGS_KEY = 'myshifts_bonus_settings_v1';
 
 export interface BonusSettings {
   isVkusnoWorker: boolean;
+  anyAvailabilityBonusEnabled: boolean;
+  hourlyRateBonusEnabled: boolean;
 }
 
 export const defaultBonusSettings: BonusSettings = {
   isVkusnoWorker: false,
+  anyAvailabilityBonusEnabled: false,
+  hourlyRateBonusEnabled: true,
 };
 
 export const loadBonusSettings = async (): Promise<BonusSettings> => {
@@ -15,8 +19,11 @@ export const loadBonusSettings = async (): Promise<BonusSettings> => {
     const raw = await AsyncStorage.getItem(BONUS_SETTINGS_KEY);
     if (!raw) return defaultBonusSettings;
     const parsed = JSON.parse(raw) as Partial<BonusSettings> & { bonusSystemEnabled?: boolean };
+    const legacyVkusnoEnabled = Boolean(parsed.isVkusnoWorker ?? parsed.bonusSystemEnabled);
     return {
-      isVkusnoWorker: Boolean(parsed.isVkusnoWorker ?? parsed.bonusSystemEnabled),
+      isVkusnoWorker: legacyVkusnoEnabled,
+      anyAvailabilityBonusEnabled: Boolean(parsed.anyAvailabilityBonusEnabled),
+      hourlyRateBonusEnabled: parsed.hourlyRateBonusEnabled ?? legacyVkusnoEnabled,
     };
   } catch {
     return defaultBonusSettings;
