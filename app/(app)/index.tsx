@@ -442,8 +442,8 @@ const createStyles = () => StyleSheet.create({
         borderWidth: 1,
     },
     syncBadgePending: {
-        backgroundColor: '#FEF3C7',
-        borderColor: '#F59E0B',
+        backgroundColor: Colors.background,
+        borderColor: Colors.border,
     },
     syncBadgeError: {
         backgroundColor: Colors.lightError,
@@ -452,7 +452,7 @@ const createStyles = () => StyleSheet.create({
     syncBadgeText: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#000000',
+        color: Colors.gray,
         marginRight: 8,
     },
     syncBadgeButton: {
