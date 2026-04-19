@@ -121,12 +121,13 @@ export default function CalendarScreen() {
             setHolidayDateSet(holidays);
             setIncludeNdfl(taxSettings.includeNdfl);
 
+            setLoading(false);
+
             const shiftPayload = await getShiftsWithOffline({ userId: user.id, start, end });
 
             setShifts((shiftPayload.shifts as Shift[]) ?? []);
         } catch (error) {
             console.error('Error fetching shifts:', error);
-        } finally {
             setLoading(false);
         }
     }, [selectedDate, user]);
