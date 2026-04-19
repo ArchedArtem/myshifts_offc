@@ -23,8 +23,10 @@ import {
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
+import { getShiftsWithOffline } from '@/services/offlineShifts';
 import { applyNdfl, calculateDuration, calculateEarnings } from '@/utils/calculations';
 import { BonusSettings, defaultBonusSettings, loadBonusSettings } from '@/services/bonusSettings';
+import { loadCachedProfile, saveCachedProfile } from '@/services/profileCache';
 import { loadTaxSettings } from '@/services/taxSettings';
 import { useTheme } from '@/hooks/useTheme';
 import { loadHolidayDateSet } from '@/services/holidays';
@@ -76,6 +78,35 @@ type ProfilePayrollSettings = {
 
 type BonusSettingsWithAmount = BonusSettings & {
   anyAvailabilityBonusAmount: number;
+};
+
+const loadProfilePayrollSettings = async (userId: string): Promise<ProfilePayrollSettings> => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('advance_day, salary_day, any_availability_bonus_amount')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    const profile = {
+      advance_day: data?.advance_day ?? null,
+      salary_day: data?.salary_day ?? null,
+      any_availability_bonus_amount: data?.any_availability_bonus_amount ?? null,
+    };
+
+    await saveCachedProfile(userId, profile);
+    return profile;
+  } catch {
+    const cached = await loadCachedProfile(userId);
+    return {
+      advance_day: typeof cached.advance_day === 'number' ? cached.advance_day : null,
+      salary_day: typeof cached.salary_day === 'number' ? cached.salary_day : null,
+      any_availability_bonus_amount:
+        typeof cached.any_availability_bonus_amount === 'number' ? cached.any_availability_bonus_amount : null,
+    };
+  }
 };
 
 const defaultStats: CalculatedStatistics = {
@@ -219,40 +250,40 @@ export default function StatisticsScreen() {
     try {
       if (!user) return;
 
-      let query = supabase.from('shifts').select('*').eq('user_id', user.id);
-
       const now = new Date();
+      const currentStart =
+        selectedPeriod === 'month'
+          ? format(startOfMonth(monthPickerDate), 'yyyy-MM-dd')
+          : selectedPeriod === 'year'
+            ? format(startOfMonth(subMonths(now, 11)), 'yyyy-MM-dd')
+            : selectedPeriod === 'custom'
+              ? customStartDate <= customEndDate
+                ? customStartDate
+                : customEndDate
+              : '2000-01-01';
 
-      if (selectedPeriod === 'month') {
-        query = query
-          .gte('date', format(startOfMonth(monthPickerDate), 'yyyy-MM-dd'))
-          .lte('date', format(endOfMonth(monthPickerDate), 'yyyy-MM-dd'));
-      } else if (selectedPeriod === 'year') {
-        query = query
-          .gte('date', format(startOfMonth(subMonths(now, 11)), 'yyyy-MM-dd'))
-          .lte('date', format(endOfMonth(now), 'yyyy-MM-dd'));
-      } else if (selectedPeriod === 'custom') {
-        const startForCurrent = customStartDate <= customEndDate ? customStartDate : customEndDate;
-        const endForCurrent = customStartDate <= customEndDate ? customEndDate : customStartDate;
-        query = query.gte('date', startForCurrent).lte('date', endForCurrent);
-      }
+      const currentEnd =
+        selectedPeriod === 'month'
+          ? format(endOfMonth(monthPickerDate), 'yyyy-MM-dd')
+          : selectedPeriod === 'year'
+            ? format(endOfMonth(now), 'yyyy-MM-dd')
+            : selectedPeriod === 'custom'
+              ? customStartDate <= customEndDate
+                ? customEndDate
+                : customStartDate
+              : '2100-12-31';
 
-      const [{ data, error }, loadedBonusSettings, taxSettings, holidayDateSet, profileResponse] = await Promise.all([
-        query,
+      const [currentPayload, loadedBonusSettings, taxSettings, holidayDateSet, profileDays] = await Promise.all([
+        getShiftsWithOffline({
+          userId: user.id,
+          start: currentStart,
+          end: currentEnd,
+        }),
         loadBonusSettings(),
         loadTaxSettings(),
         loadHolidayDateSet(),
-        supabase.from('profiles').select('advance_day, salary_day, any_availability_bonus_amount').eq('id', user.id).maybeSingle(),
+        loadProfilePayrollSettings(user.id),
       ]);
-
-      if (error) throw error;
-      if (profileResponse.error) throw profileResponse.error;
-
-      const profileDays: ProfilePayrollSettings = profileResponse.data ?? {
-        advance_day: null,
-        salary_day: null,
-        any_availability_bonus_amount: null,
-      };
       const advanceDay = Math.max(1, Math.min(31, profileDays.advance_day ?? DEFAULT_ADVANCE_DAY));
       const salaryDay = Math.max(1, Math.min(31, profileDays.salary_day ?? DEFAULT_SALARY_DAY));
       const anyAvailabilityBonusAmount = Math.max(0, profileDays.any_availability_bonus_amount ?? 12000);
@@ -261,7 +292,7 @@ export default function StatisticsScreen() {
         anyAvailabilityBonusAmount,
       };
 
-      const currentShifts = (data || []) as Shift[];
+      const currentShifts = currentPayload.shifts as Shift[];
       setBonusSettings(loadedBonusSettings);
       setStatistics(computeStats(currentShifts, bonusSettingsWithProfileAmount, selectedPeriod === 'month', holidayDateSet, taxSettings.includeNdfl));
 
@@ -270,16 +301,13 @@ export default function StatisticsScreen() {
         const prevStart = format(startOfMonth(prevMonthDate), 'yyyy-MM-dd');
         const prevEnd = format(endOfMonth(prevMonthDate), 'yyyy-MM-dd');
 
-        const { data: prevData, error: prevError } = await supabase
-          .from('shifts')
-          .select('*')
-          .eq('user_id', user.id)
-          .gte('date', prevStart)
-          .lte('date', prevEnd);
+        const prevPayload = await getShiftsWithOffline({
+          userId: user.id,
+          start: prevStart,
+          end: prevEnd,
+        });
 
-        if (prevError) throw prevError;
-
-        const prevStats = computeStats((prevData || []) as Shift[], bonusSettingsWithProfileAmount, true, holidayDateSet, taxSettings.includeNdfl);
+        const prevStats = computeStats(prevPayload.shifts as Shift[], bonusSettingsWithProfileAmount, true, holidayDateSet, taxSettings.includeNdfl);
         const currentStats = computeStats(currentShifts, bonusSettingsWithProfileAmount, true, holidayDateSet, taxSettings.includeNdfl);
 
         const monthlyBonuses = Math.max(0, currentStats.totalWithBonuses - currentStats.baseEarnings);

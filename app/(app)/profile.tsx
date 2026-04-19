@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/services/supabase/client';
 import Colors from '@/constants/Colors';
+import { loadCachedProfile, saveCachedProfile } from '@/services/profileCache';
 import { useTheme } from '@/hooks/useTheme';
 
 const ADMIN_EMAIL = 'archedartem@gmail.com'; // поменять здесь при необходимости
@@ -37,16 +38,27 @@ export default function ProfileScreen() {
         if (!user) return;
 
         const loadProfile = async () => {
-            const { data } = await supabase
-                .from('profiles')
-                .select('email, full_name')
-                .eq('id', user.id)
-                .single();
+            try {
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('email, full_name')
+                    .eq('id', user.id)
+                    .single();
 
-            setProfile({
-                email: data?.email ?? user.email ?? '',
-                full_name: data?.full_name ?? '',
-            });
+                if (error) throw error;
+
+                await saveCachedProfile(user.id, data || {});
+                setProfile({
+                    email: data?.email ?? user.email ?? '',
+                    full_name: data?.full_name ?? '',
+                });
+            } catch {
+                const cachedProfile = await loadCachedProfile(user.id);
+                setProfile({
+                    email: cachedProfile.email ?? user.email ?? '',
+                    full_name: cachedProfile.full_name ?? '',
+                });
+            }
         };
 
         loadProfile();

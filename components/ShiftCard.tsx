@@ -13,6 +13,7 @@ interface ShiftCardProps {
         break?: number | null;
         earnings: number;
         notes?: string | null;
+        sync_state?: 'synced' | 'pending' | 'error';
     };
     onPress: () => void;
 }
@@ -86,6 +87,31 @@ export default function ShiftCard({ shift, onPress }: ShiftCardProps) {
                 <Text style={{ fontSize: 20, fontWeight: 'bold', color: Colors.primary, marginBottom: 8 }}>
                     {earnings.toFixed(2)} ₽
                 </Text>
+
+                {shift.sync_state && shift.sync_state !== 'synced' && (
+                    <View
+                        style={{
+                            alignSelf: 'flex-start',
+                            backgroundColor: shift.sync_state === 'error' ? Colors.lightError : Colors.lightPrimary,
+                            borderColor: shift.sync_state === 'error' ? Colors.error : Colors.primary,
+                            borderWidth: 1,
+                            borderRadius: 999,
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            marginBottom: 8,
+                        }}
+                    >
+                        <Text
+                            style={{
+                                fontSize: 12,
+                                fontWeight: '700',
+                                color: shift.sync_state === 'error' ? Colors.error : Colors.primary,
+                            }}
+                        >
+                            {shift.sync_state === 'error' ? 'Ошибка синхронизации' : 'Не синхронизировано'}
+                        </Text>
+                    </View>
+                )}
 
                 {shift.notes && (
                     <Text style={{ fontSize: 14, color: Colors.gray, fontStyle: 'italic' }} numberOfLines={1}>

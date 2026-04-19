@@ -60,8 +60,6 @@ export default function CalendarScreen() {
     const [calendarKey, setCalendarKey] = useState(0);
     const [calendarOpacity] = useState(new Animated.Value(1));
     const [calendarTranslateX] = useState(new Animated.Value(0));
-    const [offlineMode, setOfflineMode] = useState(false);
-    const [pendingOps, setPendingOps] = useState(0);
 
     const router = useRouter();
     const { user } = useAuth();
@@ -114,8 +112,6 @@ export default function CalendarScreen() {
             ]);
 
             setShifts((shiftPayload.shifts as Shift[]) ?? []);
-            setOfflineMode(shiftPayload.fromCache);
-            setPendingOps(shiftPayload.pendingCount);
             setHolidayDateSet(holidays);
             setIncludeNdfl(taxSettings.includeNdfl);
         } catch (error) {
@@ -273,16 +269,6 @@ export default function CalendarScreen() {
                     markingType="custom"
                 />
             </Animated.View>
-
-            {(offlineMode || pendingOps > 0) && (
-                <View style={styles.offlineBadge}>
-                    <Text style={styles.offlineBadgeText}>
-                        {offlineMode ? 'Офлайн режим: показываем сохраненные смены.' : 'Есть несинхронизированные изменения.'}
-                        {pendingOps > 0 ? ` В очереди: ${pendingOps}.` : ''}
-                    </Text>
-                </View>
-            )}
-
 
             <View style={{ padding: 16, backgroundColor: Colors.white }}>
                 <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.darkGray }}>
@@ -500,22 +486,6 @@ const createStyles = () => StyleSheet.create({
         marginTop: 2,
         fontSize: 11,
         color: Colors.gray,
-    },
-    offlineBadge: {
-        marginHorizontal: 16,
-        marginTop: 8,
-        marginBottom: 4,
-        paddingVertical: 8,
-        paddingHorizontal: 10,
-        backgroundColor: '#FEF3C7',
-        borderWidth: 1,
-        borderColor: '#F59E0B',
-        borderRadius: 8,
-    },
-    offlineBadgeText: {
-        fontSize: 12,
-        color: '#92400E',
-        fontWeight: '600',
     },
     monthPickerCard: {
         backgroundColor: Colors.white,

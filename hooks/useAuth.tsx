@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, ReactNode } from 'react
 import { supabase, supabaseAnonKey, supabaseUrl } from '@/services/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 import { clearNextShiftWidgetState, syncNextShiftWidgetForUser } from '@/services/androidWidget';
+import { clearCachedProfile, saveCachedProfile } from '@/services/profileCache';
 
 interface AuthContextType {
     session: Session | null;
@@ -18,6 +19,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 async function ensureProfile(user: User): Promise<void> {
     const email = user.email?.trim().toLowerCase();
     if (!email) return;
+
+    await saveCachedProfile(user.id, {
+        email,
+        updated_at: new Date().toISOString(),
+    });
 
     const { error } = await supabase
         .from('profiles')
@@ -121,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             setSession(null);
             setUser(null);
+            await clearCachedProfile(user?.id);
         } catch (error: any) {
             console.error('Sign out error:', error);
             throw error;
@@ -168,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         await signOut();
+        await clearCachedProfile(user.id);
     };
 
     const value: AuthContextType = {

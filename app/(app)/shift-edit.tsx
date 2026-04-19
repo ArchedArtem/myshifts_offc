@@ -16,6 +16,7 @@ import Colors from '@/constants/Colors';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { applyNdfl, calculateEarnings } from '@/utils/calculations';
+import { loadCachedProfile, saveCachedProfile } from '@/services/profileCache';
 import { ShiftTemplate, getAllShiftTemplates } from '@/services/shiftTemplates';
 import { loadHolidayDateSet } from '@/services/holidays';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
@@ -117,6 +118,7 @@ export default function ShiftEditScreen() {
                     .eq('id', user.id)
                     .single();
 
+                await saveCachedProfile(user.id, profile || {});
                 setFormData((prev) => ({
                     ...prev,
                     date: dateParam || format(new Date(), 'yyyy-MM-dd'),
@@ -125,10 +127,13 @@ export default function ShiftEditScreen() {
                         : prev.hourlyRate,
                 }));
             } catch {
-                // Офлайн: просто оставляем значения по умолчанию/текущие.
+                const cachedProfile = await loadCachedProfile(user.id);
                 setFormData((prev) => ({
                     ...prev,
                     date: dateParam || format(new Date(), 'yyyy-MM-dd'),
+                    hourlyRate: cachedProfile.default_hourly_rate
+                        ? String(cachedProfile.default_hourly_rate)
+                        : prev.hourlyRate,
                 }));
             }
         } catch (error: any) {

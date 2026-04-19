@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import Colors from '@/constants/Colors';
-import { supabase } from '@/services/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { getAllShiftsOfflineAware } from '@/services/offlineShifts';
 import { useTheme } from '@/hooks/useTheme';
 
 type Period = 'month' | 'year' | 'all';
@@ -46,28 +46,23 @@ export default function ExportDataScreen() {
   const fetchShifts = useCallback(async (): Promise<ShiftRow[]> => {
     if (!user) return [];
 
-    let query = supabase
-      .from('shifts')
-      .select('date,start_time,end_time,hourly_rate,extra_payment,earnings,notes')
-      .eq('user_id', user.id)
-      .order('date', { ascending: true })
-      .order('start_time', { ascending: true });
-
     const now = new Date();
+    const { shifts } = await getAllShiftsOfflineAware(user.id);
+    let rows = (shifts ?? []) as ShiftRow[];
+
     if (period === 'month') {
       const start = format(startOfMonth(now), 'yyyy-MM-dd');
       const end = format(endOfMonth(now), 'yyyy-MM-dd');
-      query = query.gte('date', start).lte('date', end);
+      rows = rows.filter((row) => row.date >= start && row.date <= end);
     } else if (period === 'year') {
       const start = format(startOfMonth(subMonths(now, 11)), 'yyyy-MM-dd');
       const end = format(endOfMonth(now), 'yyyy-MM-dd');
-      query = query.gte('date', start).lte('date', end);
+      rows = rows.filter((row) => row.date >= start && row.date <= end);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
-
-    return (data ?? []) as ShiftRow[];
+    return rows
+      .slice()
+      .sort((a, b) => `${a.date} ${normalizeTime(a.start_time)}`.localeCompare(`${b.date} ${normalizeTime(b.start_time)}`));
   }, [period, user]);
 
   const buildPrettyExportText = (rows: ShiftRow[]) => {

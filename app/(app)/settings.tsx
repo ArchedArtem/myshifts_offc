@@ -17,6 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/services/supabase/client';
 import Colors from '@/constants/Colors';
 import { BonusSettings, defaultBonusSettings, loadBonusSettings, saveBonusSettings } from '@/services/bonusSettings';
+import { loadCachedProfile, saveCachedProfile } from '@/services/profileCache';
 import { defaultTaxSettings, loadTaxSettings, saveTaxSettings, TaxSettings } from '@/services/taxSettings';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -59,6 +60,7 @@ export default function SettingsScreen() {
     if (!user) return;
 
     const loadProfile = async () => {
+      const cachedProfile = await loadCachedProfile(user.id);
       const { data, error } = await supabase
         .from('profiles')
         .select('email, full_name, phone, default_hourly_rate, advance_day, salary_day, any_availability_bonus_amount')
@@ -67,15 +69,16 @@ export default function SettingsScreen() {
 
       if (error) {
         setForm({
-          email: user.email ?? '',
-          full_name: '',
-          phone: '',
-          default_hourly_rate: '',
-          advance_day: String(DEFAULT_ADVANCE_DAY),
-          salary_day: String(DEFAULT_SALARY_DAY),
-          any_availability_bonus_amount: '12000',
+          email: cachedProfile.email ?? user.email ?? '',
+          full_name: cachedProfile.full_name ?? '',
+          phone: cachedProfile.phone ?? '',
+          default_hourly_rate: cachedProfile.default_hourly_rate ? String(cachedProfile.default_hourly_rate) : '',
+          advance_day: String(cachedProfile.advance_day ?? DEFAULT_ADVANCE_DAY),
+          salary_day: String(cachedProfile.salary_day ?? DEFAULT_SALARY_DAY),
+          any_availability_bonus_amount: String(cachedProfile.any_availability_bonus_amount ?? 12000),
         });
       } else {
+        await saveCachedProfile(user.id, data || {});
         setForm({
           email: data?.email ?? user.email ?? '',
           full_name: data?.full_name ?? '',
@@ -136,6 +139,17 @@ export default function SettingsScreen() {
         );
 
       if (error) throw new Error(error.message);
+
+      await saveCachedProfile(user.id, {
+        email: normalizedEmail,
+        full_name: form.full_name.trim() || null,
+        phone: form.phone.trim() || null,
+        default_hourly_rate: form.default_hourly_rate.trim() ? parseFloat(form.default_hourly_rate) : null,
+        advance_day: parsedAdvanceDay,
+        salary_day: parsedSalaryDay,
+        any_availability_bonus_amount: parsedAnyAvailabilityBonusAmount,
+        updated_at: new Date().toISOString(),
+      });
 
       await Promise.all([
         saveBonusSettings(bonusSettings),

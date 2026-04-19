@@ -1,4 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/services/supabase/client';
+
+const HOLIDAYS_CACHE_KEY = 'myshifts_holidays_cache_v1';
 
 export type Holiday = {
   date: string;
@@ -10,33 +13,45 @@ type HolidayRow = {
   name: string;
 };
 
-export const loadHolidayDateSet = async (): Promise<Set<string>> => {
-  const { data, error } = await supabase
-    .from('holidays')
-    .select('holiday_date, name')
-    .eq('is_active', true)
-    .order('holiday_date', { ascending: true });
+const saveHolidayCache = async (holidays: Holiday[]) => {
+  await AsyncStorage.setItem(HOLIDAYS_CACHE_KEY, JSON.stringify(holidays));
+};
 
-  if (error) {
-    throw error;
+const loadHolidayCache = async (): Promise<Holiday[]> => {
+  const raw = await AsyncStorage.getItem(HOLIDAYS_CACHE_KEY);
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Holiday[]) : [];
+  } catch {
+    return [];
   }
-
-  return new Set(((data || []) as HolidayRow[]).map((row) => row.holiday_date));
 };
 
 export const loadHolidays = async (): Promise<Holiday[]> => {
-  const { data, error } = await supabase
-    .from('holidays')
-    .select('holiday_date, name')
-    .eq('is_active', true)
-    .order('holiday_date', { ascending: true });
+  try {
+    const { data, error } = await supabase
+      .from('holidays')
+      .select('holiday_date, name')
+      .eq('is_active', true)
+      .order('holiday_date', { ascending: true });
 
-  if (error) {
-    throw error;
+    if (error) throw error;
+
+    const holidays = ((data || []) as HolidayRow[]).map((row) => ({
+      date: row.holiday_date,
+      name: row.name,
+    }));
+
+    await saveHolidayCache(holidays);
+    return holidays;
+  } catch {
+    return loadHolidayCache();
   }
+};
 
-  return ((data || []) as HolidayRow[]).map((row) => ({
-    date: row.holiday_date,
-    name: row.name,
-  }));
+export const loadHolidayDateSet = async (): Promise<Set<string>> => {
+  const holidays = await loadHolidays();
+  return new Set(holidays.map((row) => row.date));
 };

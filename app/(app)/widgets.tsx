@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } 
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/services/supabase/client';
+import { getAllShiftsOfflineAware } from '@/services/offlineShifts';
 import { applyNdfl, calculateDuration, calculateEarnings } from '@/utils/calculations';
 import { useTheme } from '@/hooks/useTheme';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
@@ -38,15 +38,17 @@ export default function WidgetsScreen() {
     const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-    const [{ data: monthData }, { data: weekData }, { data: nextData }, taxSettings] = await Promise.all([
-      supabase.from('shifts').select('*').eq('user_id', user.id).gte('date', monthStart).lte('date', monthEnd),
-      supabase.from('shifts').select('*').eq('user_id', user.id).gte('date', weekStart).lte('date', weekEnd),
-      supabase.from('shifts').select('date, start_time').eq('user_id', user.id).gte('date', format(now, 'yyyy-MM-dd')).order('date', { ascending: true }).order('start_time', { ascending: true }).limit(1),
+    const [allShiftsPayload, taxSettings] = await Promise.all([
+      getAllShiftsOfflineAware(user.id),
       loadTaxSettings(),
     ]);
 
-    const monthRows = (monthData || []) as ShiftRow[];
-    const weekRows = (weekData || []) as ShiftRow[];
+    const allShifts = (allShiftsPayload.shifts || []) as ShiftRow[];
+    const monthRows = allShifts.filter((shift) => shift.date >= monthStart && shift.date <= monthEnd);
+    const weekRows = allShifts.filter((shift) => shift.date >= weekStart && shift.date <= weekEnd);
+    const nextData = allShifts
+      .filter((shift) => shift.date >= format(now, 'yyyy-MM-dd'))
+      .sort((a, b) => `${a.date} ${normalizeTime(a.start_time)}`.localeCompare(`${b.date} ${normalizeTime(b.start_time)}`));
 
     const earnings = monthRows.reduce((sum, shift) => sum + applyNdfl(calculateEarnings(
       normalizeTime(shift.start_time),
@@ -65,7 +67,7 @@ export default function WidgetsScreen() {
     setMonthEarnings(earnings);
     setWeekHours(hours);
 
-    const nearest = (nextData || [])[0] as { date: string; start_time: string } | undefined;
+    const nearest = nextData[0] as { date: string; start_time: string } | undefined;
     if (nearest) {
       const dt = parseISO(`${nearest.date}T${normalizeTime(nearest.start_time)}:00`);
       setNextShift(`${format(dt, 'dd.MM')} в ${normalizeTime(nearest.start_time)}`);

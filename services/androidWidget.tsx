@@ -10,7 +10,7 @@ import {
   type WidgetRepresentation,
 } from 'react-native-android-widget';
 
-import { supabase } from '@/services/supabase/client';
+import { getUpcomingShiftOfflineAware } from '@/services/offlineShifts';
 
 export const NEXT_SHIFT_WIDGET_NAME = 'NextShiftWidget';
 const NEXT_SHIFT_WIDGET_STORAGE_KEY = '@myshifts_next_shift_widget_v1';
@@ -139,21 +139,7 @@ export async function syncNextShiftWidgetForUser(userId: string): Promise<void> 
   if (Platform.OS !== 'android' || !userId) return;
 
   const today = format(new Date(), 'yyyy-MM-dd');
-  const { data, error } = await supabase
-    .from('shifts')
-    .select('date, start_time, end_time')
-    .eq('user_id', userId)
-    .gte('date', today)
-    .order('date', { ascending: true })
-    .order('start_time', { ascending: true })
-    .limit(1);
-
-  if (error) {
-    console.warn('Widget sync error:', error.message);
-    return;
-  }
-
-  const nearest = (data || [])[0] as { date: string; start_time: string; end_time: string } | undefined;
+  const { shift: nearest } = await getUpcomingShiftOfflineAware(userId, today);
 
   const state: NextShiftWidgetState = nearest
     ? {
