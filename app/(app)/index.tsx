@@ -427,7 +427,7 @@ export default function CalendarScreen() {
 const createStyles = () => StyleSheet.create({
     syncBadge: {
         position: 'absolute',
-        bottom: 86, // Чуть выше плюсика (56 высота + 20 отступ + 10)
+        bottom: 86,
         right: 20,
         flexDirection: 'row',
         alignItems: 'center',
@@ -452,7 +452,7 @@ const createStyles = () => StyleSheet.create({
     syncBadgeText: {
         fontSize: 12,
         fontWeight: '600',
-        color: Colors.darkGray,
+        color: '#000000',
         marginRight: 8,
     },
     syncBadgeButton: {
