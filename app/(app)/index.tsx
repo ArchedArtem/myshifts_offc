@@ -25,6 +25,10 @@ import { loadHolidayDateSet } from '@/services/holidays';
 import { defaultTaxSettings, loadTaxSettings } from '@/services/taxSettings';
 import { deleteShiftOfflineAware, getShiftsWithOffline } from '@/services/offlineShifts';
 
+import { ActivityIndicator } from 'react-native';
+import { useShiftSyncStatus } from '@/hooks/useShiftSyncStatus';
+import { syncNow } from '@/services/offlineSync';
+
 
 LocaleConfig.locales.ru = {
     monthNames: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
@@ -63,6 +67,7 @@ export default function CalendarScreen() {
 
     const router = useRouter();
     const { user } = useAuth();
+    const syncState = useShiftSyncStatus();
     useTheme();
     const styles = createStyles();
 
@@ -296,6 +301,28 @@ export default function CalendarScreen() {
                 contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
             />
 
+            {(syncState.pendingCount > 0 || syncState.status === 'error') && (
+                <View style={[
+                    styles.syncBadge,
+                    syncState.status === 'error' ? styles.syncBadgeError : styles.syncBadgePending
+                ]}>
+                    <Text style={styles.syncBadgeText}>
+                        {syncState.status === 'error' ? 'Ошибка синхр.' : `В очереди: ${syncState.pendingCount}`}
+                    </Text>
+                    <TouchableOpacity
+                        style={styles.syncBadgeButton}
+                        onPress={() => user?.id && syncNow(user.id, { forceRefreshCache: true })}
+                        disabled={syncState.syncing}
+                    >
+                        {syncState.syncing ? (
+                            <ActivityIndicator color={Colors.darkGray} size="small" />
+                        ) : (
+                            <Text style={styles.syncBadgeIcon}>↻</Text>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            )}
+
             <TouchableOpacity
                 style={styles.fab}
                 onPress={() =>
@@ -398,6 +425,45 @@ export default function CalendarScreen() {
 }
 
 const createStyles = () => StyleSheet.create({
+    syncBadge: {
+        position: 'absolute',
+        bottom: 86, // Чуть выше плюсика (56 высота + 20 отступ + 10)
+        right: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 20,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        borderWidth: 1,
+    },
+    syncBadgePending: {
+        backgroundColor: '#FEF3C7',
+        borderColor: '#F59E0B',
+    },
+    syncBadgeError: {
+        backgroundColor: Colors.lightError,
+        borderColor: Colors.error,
+    },
+    syncBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: Colors.darkGray,
+        marginRight: 8,
+    },
+    syncBadgeButton: {
+        paddingHorizontal: 4,
+    },
+    syncBadgeIcon: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Colors.primary,
+    },
+
     fab: {
         position: 'absolute',
         bottom: 20,

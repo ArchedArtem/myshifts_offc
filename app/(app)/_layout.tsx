@@ -63,7 +63,7 @@ export default function AppLayout() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <ShiftSyncBanner userId={session.user.id} />
+      {/*<ShiftSyncBanner userId={session.user.id} />*/}
 
       <View style={{ flex: 1 }}>
         <Tabs

@@ -116,31 +116,7 @@ export default function SettingsScreen() {
 
     setSaving(true);
     try {
-      if (normalizedEmail !== (user.email ?? '').toLowerCase()) {
-        const { error: updateUserError } = await supabase.auth.updateUser({ email: normalizedEmail });
-        if (updateUserError) throw new Error(updateUserError.message);
-      }
-
-      const { error } = await supabase
-        .from('profiles')
-        .upsert(
-          {
-            id: user.id,
-            email: normalizedEmail,
-            full_name: form.full_name.trim() || null,
-            phone: form.phone.trim() || null,
-            default_hourly_rate: form.default_hourly_rate.trim() ? parseFloat(form.default_hourly_rate) : null,
-            advance_day: parsedAdvanceDay,
-            salary_day: parsedSalaryDay,
-            any_availability_bonus_amount: parsedAnyAvailabilityBonusAmount,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' }
-        );
-
-      if (error) throw new Error(error.message);
-
-      await saveCachedProfile(user.id, {
+      const profileData = {
         email: normalizedEmail,
         full_name: form.full_name.trim() || null,
         phone: form.phone.trim() || null,
@@ -149,14 +125,48 @@ export default function SettingsScreen() {
         salary_day: parsedSalaryDay,
         any_availability_bonus_amount: parsedAnyAvailabilityBonusAmount,
         updated_at: new Date().toISOString(),
-      });
+      };
+
+      await saveCachedProfile(user.id, profileData);
 
       await Promise.all([
         saveBonusSettings(bonusSettings),
         saveTaxSettings(taxSettings),
       ]);
 
-      Alert.alert('Успешно', 'Настройки сохранены', [{ text: 'OK', onPress: () => router.back() }]);
+      let isOffline = false;
+      try {
+        if (normalizedEmail !== (user.email ?? '').toLowerCase()) {
+          const { error: updateUserError } = await supabase.auth.updateUser({ email: normalizedEmail });
+          if (updateUserError) throw updateUserError;
+        }
+
+        const { error } = await supabase
+            .from('profiles')
+            .upsert(
+                { id: user.id, ...profileData },
+                { onConflict: 'id' }
+            );
+
+        if (error) throw error;
+      } catch (networkError: any) {
+        if (networkError.message?.includes('Network request failed') || networkError.message?.includes('Failed to fetch')) {
+          isOffline = true;
+        } else {
+          throw networkError;
+        }
+      }
+
+      if (isOffline) {
+        Alert.alert(
+            'Сохранено локально',
+            'Нет подключения к сети. Настройки сохранены на устройстве.',
+            [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert('Успешно', 'Настройки сохранены', [{ text: 'OK', onPress: () => router.back() }]);
+      }
+
     } catch (error: any) {
       Alert.alert('Ошибка', error.message || 'Не удалось сохранить настройки');
     } finally {
