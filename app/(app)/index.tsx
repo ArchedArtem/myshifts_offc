@@ -23,7 +23,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import { loadHolidayDateSet } from '@/services/holidays';
 import { defaultTaxSettings, loadTaxSettings } from '@/services/taxSettings';
-import { deleteShiftOfflineAware, getShiftsWithOffline } from '@/services/offlineShifts';
+import { deleteShiftOfflineAware, getShiftsWithOffline, getCachedShifts } from '@/services/offlineShifts';
 
 import { ActivityIndicator } from 'react-native';
 import { useShiftSyncStatus } from '@/hooks/useShiftSyncStatus';
@@ -110,15 +110,20 @@ export default function CalendarScreen() {
             const start = format(startOfMonth(selectedDate), 'yyyy-MM-dd');
             const end = format(endOfMonth(selectedDate), 'yyyy-MM-dd');
 
-            const [shiftPayload, holidays, taxSettings] = await Promise.all([
-                getShiftsWithOffline({ userId: user.id, start, end }),
+            const [cachedShifts, holidays, taxSettings] = await Promise.all([
+                getCachedShifts(user.id),
                 loadHolidayDateSet(),
                 loadTaxSettings(),
             ]);
 
-            setShifts((shiftPayload.shifts as Shift[]) ?? []);
+            const localRange = cachedShifts.filter((s) => s.date >= start && s.date <= end);
+            setShifts(localRange as Shift[]);
             setHolidayDateSet(holidays);
             setIncludeNdfl(taxSettings.includeNdfl);
+
+            const shiftPayload = await getShiftsWithOffline({ userId: user.id, start, end });
+
+            setShifts((shiftPayload.shifts as Shift[]) ?? []);
         } catch (error) {
             console.error('Error fetching shifts:', error);
         } finally {
