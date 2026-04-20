@@ -15,7 +15,7 @@ import * as Haptics from '@/utils/haptics';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { addMonths, format, startOfMonth, endOfMonth } from 'date-fns';
+import { addMonths, format, startOfMonth, endOfMonth, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import ShiftCard from '@/components/ShiftCard';
 import Colors from '@/constants/Colors';
@@ -25,8 +25,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import { loadHolidayDateSet } from '@/services/holidays';
 import { defaultTaxSettings, loadTaxSettings } from '@/services/taxSettings';
-import { deleteShiftOfflineAware, getShiftsWithOffline, getCachedShifts } from '@/services/offlineShifts';
-
+import { deleteShiftOfflineAware, getShiftsWithOffline, getCachedShifts, saveShiftOfflineAware } from '@/services/offlineShifts';
 import { ActivityIndicator } from 'react-native';
 import { useShiftSyncStatus } from '@/hooks/useShiftSyncStatus';
 import { syncNow } from '@/services/offlineSync';
@@ -270,6 +269,61 @@ export default function CalendarScreen() {
         ]);
     };
 
+    const handleDuplicateShift = async () => {
+        if (!selectedShift || !user) return;
+
+        try {
+            const nextDate = format(addDays(new Date(selectedShift.date), 1), 'yyyy-MM-dd');
+
+            const start = selectedShift.start_time?.split(':').slice(0, 2).join(':');
+            const end = selectedShift.end_time?.split(':').slice(0, 2).join(':');
+            const earnings = calculateEarnings(
+                start,
+                end,
+                selectedShift.hourly_rate ?? 0,
+                selectedShift.extra_payment ?? 0,
+                selectedShift.break ?? 0
+            );
+
+            const shiftData = {
+                user_id: user.id,
+                date: nextDate,
+                start_time: selectedShift.start_time,
+                end_time: selectedShift.end_time,
+                hourly_rate: selectedShift.hourly_rate,
+                extra_payment: selectedShift.extra_payment,
+                break: selectedShift.break,
+                notes: selectedShift.notes,
+                earnings: earnings,
+            };
+
+            const result = await saveShiftOfflineAware({
+                userId: user.id,
+                isEdit: false,
+                shiftData,
+            });
+
+            setSelectedShift(null);
+
+            if (result.queued) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert('Офлайн', 'Смена скопирована на завтра и сохранится на сервере при появлении сети.');
+            } else {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+
+            setSelectedDate(new Date(nextDate));
+            if (user?.id) {
+                await syncNextShiftWidgetForUser(user.id);
+            }
+            await fetchShifts();
+
+        } catch (error: any) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            Alert.alert('Ошибка', error.message || 'Не удалось скопировать смену');
+        }
+    };
+
     const handleMonthChange = (monthDate: Date) => {
         const diffDirection = monthDate.getTime() >= selectedMonthStart.getTime() ? 1 : -1;
         applyMonthSelection(monthDate, diffDirection);
@@ -438,28 +492,38 @@ export default function CalendarScreen() {
                             <Text style={styles.modalNote}>📝 {selectedShift.notes}</Text>
                         )}
 
-                        <View style={styles.modalActions}>
+                        <View style={styles.modalActionsContainer}>
                             <TouchableOpacity
-                                style={[styles.actionButton, styles.editButton]}
-                                onPress={() => {
-                                    if (!selectedShift) return;
-                                    const shiftId = String(selectedShift.id);
-                                    setSelectedShift(null);
-                                    router.push({
-                                        pathname: '/(app)/shift-edit',
-                                        params: { shiftId },
-                                    });
-                                }}
+                                style={[styles.actionButton, styles.duplicateButton]}
+                                onPress={handleDuplicateShift}
                             >
-                                <Text style={styles.actionText}>Редактировать</Text>
+                                <Ionicons name="copy-outline" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
+                                <Text style={styles.duplicateButtonText}>Скопировать на завтра</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={[styles.actionButton, styles.deleteButton]}
-                                onPress={handleDeleteShift}
-                            >
-                                <Text style={styles.actionText}>Удалить</Text>
-                            </TouchableOpacity>
+                            <View style={styles.modalActionsRow}>
+                                <TouchableOpacity
+                                    style={[styles.actionButton, styles.editButton]}
+                                    onPress={() => {
+                                        if (!selectedShift) return;
+                                        const shiftId = String(selectedShift.id);
+                                        setSelectedShift(null);
+                                        router.push({
+                                            pathname: '/(app)/shift-edit',
+                                            params: { shiftId },
+                                        });
+                                    }}
+                                >
+                                    <Text style={styles.actionText}>Редактировать</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.actionButton, styles.deleteButton]}
+                                    onPress={handleDeleteShift}
+                                >
+                                    <Text style={styles.actionText}>Удалить</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </Pressable>
                 </Pressable>
@@ -621,26 +685,44 @@ const createStyles = () => StyleSheet.create({
         color: Colors.gray,
         fontStyle: 'italic',
     },
-    modalActions: {
+    modalActionsContainer: {
         marginTop: 16,
+        gap: 10,
+    },
+    modalActionsRow: {
         flexDirection: 'row',
         gap: 10,
     },
     actionButton: {
-        flex: 1,
         borderRadius: 10,
         paddingVertical: 12,
         alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
     },
     editButton: {
+        flex: 1,
         backgroundColor: Colors.primary,
     },
     deleteButton: {
+        flex: 1,
         backgroundColor: Colors.error,
+    },
+    duplicateButton: {
+        backgroundColor: Colors.lightPrimary,
+        borderWidth: 1,
+        borderColor: Colors.primary,
+        width: '100%',
+    },
+    duplicateButtonText: {
+        color: Colors.primary,
+        fontWeight: '600',
+        fontSize: 15,
     },
     actionText: {
         color: Colors.onPrimary,
         fontWeight: '600',
+        fontSize: 15,
     },
     monthHeaderButton: {
         alignItems: 'center',
