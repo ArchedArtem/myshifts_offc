@@ -8,6 +8,7 @@ import {
     Alert,
     Platform,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -234,16 +235,19 @@ export default function ShiftEditScreen() {
             });
 
             if (result.queued) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 Alert.alert('Офлайн режим', isEdit
                     ? 'Изменения сохранены локально и отправятся при появлении интернета.'
                     : 'Смена сохранена локально и отправится при появлении интернета.');
             } else {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 Alert.alert('Успешно', isEdit ? 'Смена обновлена' : 'Смена добавлена');
             }
 
             await syncNextShiftWidgetForUser(user.id);
             router.back();
         } catch (error: any) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             Alert.alert('Ошибка', error.message);
         } finally {
             setLoading(false);

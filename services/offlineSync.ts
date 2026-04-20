@@ -12,7 +12,7 @@ let syncInterval: ReturnType<typeof setInterval> | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
 let inFlightSync: Promise<ShiftSyncState> | null = null;
 
-const SYNC_INTERVAL_MS = 15000;
+const SYNC_INTERVAL_MS = 60000;
 
 export const refreshShiftSyncState = async (userId?: string | null): Promise<ShiftSyncState> => {
   if (!userId) {

@@ -9,7 +9,9 @@ import {
     Alert,
     StyleSheet,
     Animated,
+    RefreshControl,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -68,6 +70,7 @@ export default function CalendarScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const syncState = useShiftSyncStatus();
+    const [refreshing, setRefreshing] = useState(false);
     useTheme();
     const styles = createStyles();
 
@@ -137,6 +140,27 @@ export default function CalendarScreen() {
             fetchShifts();
         }, [fetchShifts])
     );
+
+    const onRefresh = useCallback(async () => {
+        if (!user) return;
+        setRefreshing(true);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+        try {
+            const result = await syncNow(user.id, { forceRefreshCache: true });
+            await fetchShifts();
+
+            if (result.status === 'error') {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            } else {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+        } catch (error) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [user, fetchShifts]);
 
     const markedDates = useMemo(() => {
         const marked: Record<string, any> = {};
@@ -222,13 +246,17 @@ export default function CalendarScreen() {
 
                         setSelectedShift(null);
                         if (result.queued) {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                             Alert.alert('Офлайн режим', 'Удаление сохранено локально и отправится при появлении интернета.');
+                        } else {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                         }
                         if (user?.id) {
                             await syncNextShiftWidgetForUser(user.id);
                         }
                         await fetchShifts();
                     } catch (error: any) {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                         Alert.alert('Ошибка', error.message || 'Не удалось удалить смену');
                     }
                 },
@@ -252,7 +280,10 @@ export default function CalendarScreen() {
                 <Calendar
                     key={calendarKey}
                     current={formattedDate}
-                    onDayPress={(day: { dateString: string }) => setSelectedDate(new Date(day.dateString))}
+                    onDayPress={(day: { dateString: string }) => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setSelectedDate(new Date(day.dateString));
+                    }}
                     onMonthChange={(month: { dateString: string }) => {
                         handleMonthChange(new Date(month.dateString));
                     }}
@@ -305,6 +336,14 @@ export default function CalendarScreen() {
                     </Text>
                 }
                 contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={[Colors.primary]}
+                        tintColor={Colors.primary}
+                    />
+                }
             />
 
             {(syncState.pendingCount > 0 || syncState.status === 'error') && (
@@ -317,7 +356,18 @@ export default function CalendarScreen() {
                     </Text>
                     <TouchableOpacity
                         style={styles.syncBadgeButton}
-                        onPress={() => user?.id && syncNow(user.id, { forceRefreshCache: true })}
+                        onPress={async () => {
+                            if (!user?.id) return;
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            const result = await syncNow(user.id, { forceRefreshCache: true });
+                            await fetchShifts();
+
+                            if (result.status === 'error') {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                            } else {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            }
+                        }}
                         disabled={syncState.syncing}
                     >
                         {syncState.syncing ? (
