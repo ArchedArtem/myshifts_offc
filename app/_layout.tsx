@@ -9,6 +9,7 @@ import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { registerNextShiftWidgetTask } from '@/services/androidWidget';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,7 +23,6 @@ function LayoutInitializer() {
 
         initializeNotifications();
 
-        // Даем время для инициализации
         setTimeout(() => {
             setAppIsReady(true);
             SplashScreen.hideAsync();
@@ -81,8 +81,10 @@ function ThemedProviders() {
 
 export default function RootLayout() {
     return (
-        <ThemeProvider>
-            <ThemedProviders />
-        </ThemeProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <ThemeProvider>
+                <ThemedProviders />
+            </ThemeProvider>
+        </GestureHandlerRootView>
     );
 }
