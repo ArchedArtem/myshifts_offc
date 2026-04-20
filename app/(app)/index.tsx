@@ -33,6 +33,7 @@ import { syncNow } from '@/services/offlineSync';
 
 import ShiftSkeleton from '@/components/ShiftSkeleton';
 
+import { Ionicons } from '@expo/vector-icons';
 
 LocaleConfig.locales.ru = {
     monthNames: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
@@ -341,9 +342,15 @@ export default function CalendarScreen() {
                             <ShiftSkeleton />
                         </View>
                     ) : (
-                        <Text style={{ textAlign: 'center', color: Colors.gray, marginTop: 20 }}>
-                            Нет смен на эту дату
-                        </Text>
+                        <View style={styles.emptyContainer}>
+                            <View style={styles.emptyIconCircle}>
+                                <Ionicons name="cafe-outline" size={36} color={Colors.primary} />
+                            </View>
+                            <Text style={styles.emptyTitle}>Выходной!</Text>
+                            <Text style={styles.emptySubtitle}>
+                                На эту дату смен не найдено.{'\n'}Можно отдыхать или добавить новую.
+                            </Text>
+                        </View>
                     )
                 }
                 contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
@@ -492,6 +499,34 @@ export default function CalendarScreen() {
 }
 
 const createStyles = () => StyleSheet.create({
+    emptyContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 50,
+        paddingBottom: 20,
+    },
+    emptyIconCircle: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: Colors.lightPrimary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: Colors.darkGray,
+        marginBottom: 8,
+    },
+    emptySubtitle: {
+        fontSize: 14,
+        color: Colors.gray,
+        textAlign: 'center',
+        lineHeight: 20,
+        paddingHorizontal: 30,
+    },
     syncBadge: {
         position: 'absolute',
         bottom: 86,
