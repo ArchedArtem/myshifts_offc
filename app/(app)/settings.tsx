@@ -11,6 +11,7 @@ import {
   Switch,
   Platform,
 } from 'react-native';
+import * as Haptics from '@/utils/haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,6 +39,7 @@ const clampDay = (value: string, fallback: number) => String(Math.max(1, Math.mi
 
 export default function SettingsScreen() {
   const [saving, setSaving] = useState(false);
+  const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const [form, setForm] = useState<ProfileForm>({
     email: '',
     full_name: '',
@@ -96,6 +98,7 @@ export default function SettingsScreen() {
       ]);
       setBonusSettings(loadedBonusSettings);
       setTaxSettings(loadedTaxSettings);
+      setHapticsEnabled(Haptics.getHapticsEnabled());
     };
 
     loadProfile();
@@ -132,6 +135,7 @@ export default function SettingsScreen() {
       await Promise.all([
         saveBonusSettings(bonusSettings),
         saveTaxSettings(taxSettings),
+        Haptics.setHapticsEnabled(hapticsEnabled),
       ]);
 
       let isOffline = false;
@@ -227,6 +231,19 @@ export default function SettingsScreen() {
 
       <View style={styles.bonusCard}>
         <View style={[styles.row, styles.firstRow]}>
+          <View style={styles.rowTextWrap}>
+            <Text style={styles.rowTitle}>Вибрация и отклик</Text>
+            <Text style={styles.rowDescription}>Тактильная отдача при нажатиях и успешных действиях</Text>
+          </View>
+          <Switch
+              value={hapticsEnabled}
+              onValueChange={setHapticsEnabled}
+              thumbColor={hapticsEnabled ? Colors.primary : '#f4f3f4'}
+              trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
+          />
+        </View>
+
+        <View style={[styles.row]}>
           <View style={styles.rowTextWrap}>
             <Text style={styles.rowTitle}>Учитывать НДФЛ 13%</Text>
             <Text style={styles.rowDescription}>Если включено, в доходах показывается сумма после удержания налога</Text>

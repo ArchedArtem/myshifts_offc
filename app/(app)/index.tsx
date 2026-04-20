@@ -11,7 +11,7 @@ import {
     Animated,
     RefreshControl,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/utils/haptics';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
