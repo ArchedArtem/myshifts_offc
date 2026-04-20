@@ -234,9 +234,7 @@ export default function CalendarScreen() {
         includeNdfl,
     );
 
-    const handleDeleteShift = () => {
-        if (!selectedShift) return;
-
+    const handleDeleteShift = (shiftToDelete: Shift) => {
         Alert.alert('Удалить смену', 'Вы уверены, что хотите удалить эту смену?', [
             { text: 'Отмена', style: 'cancel' },
             {
@@ -246,7 +244,7 @@ export default function CalendarScreen() {
                     try {
                         const result = await deleteShiftOfflineAware({
                             userId: user?.id || '',
-                            shiftId: selectedShift.id,
+                            shiftId: shiftToDelete.id,
                         });
 
                         setSelectedShift(null);
@@ -388,6 +386,13 @@ export default function CalendarScreen() {
                     <ShiftCard
                         shift={item}
                         onPress={() => setSelectedShift(item)}
+                        onEdit={() => {
+                            router.push({
+                                pathname: '/(app)/shift-edit',
+                                params: { shiftId: String(item.id) },
+                            });
+                        }}
+                        onDelete={() => handleDeleteShift(item)}
                     />
                 )}
                 ListEmptyComponent={
@@ -519,7 +524,7 @@ export default function CalendarScreen() {
 
                                 <TouchableOpacity
                                     style={[styles.actionButton, styles.deleteButton]}
-                                    onPress={handleDeleteShift}
+                                    onPress={() => selectedShift && handleDeleteShift(selectedShift)}
                                 >
                                     <Text style={styles.actionText}>Удалить</Text>
                                 </TouchableOpacity>
