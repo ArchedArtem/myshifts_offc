@@ -312,7 +312,7 @@ export default function SettingsScreen() {
             <View style={styles.row}>
               <View style={styles.rowTextWrap}>
                 <Text style={styles.rowTitle}>Бонус к ставке при 120+ часах</Text>
-                <Text style={styles.rowDescription}>Если включено, при 120+ часах добавляется +100 ₽/ч как раньше</Text>
+                <Text style={styles.rowDescription}>Если включено, при 120+ часах добавляется +100 ₽/ч</Text>
               </View>
               <Switch
                 value={bonusSettings.hourlyRateBonusEnabled}

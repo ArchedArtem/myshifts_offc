@@ -24,6 +24,7 @@ import {
 import { ru } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { getShiftsWithOffline } from '@/services/offlineShifts';
+import MonthlyChart from '@/components/MonthlyChart';
 import { applyNdfl, calculateDuration, calculateEarnings } from '@/utils/calculations';
 import { BonusSettings, defaultBonusSettings, loadBonusSettings } from '@/services/bonusSettings';
 import { loadCachedProfile, saveCachedProfile } from '@/services/profileCache';
@@ -35,6 +36,7 @@ const DEFAULT_ADVANCE_DAY = 26;
 const DEFAULT_SALARY_DAY = 11;
 
 type Shift = {
+  id: string | number;
   date: string;
   start_time: string;
   end_time: string;
@@ -171,6 +173,8 @@ export default function StatisticsScreen() {
   const [payrollSummary, setPayrollSummary] = useState<PayrollSummary | null>(null);
   const [bonusSettings, setBonusSettings] = useState<BonusSettings>(defaultBonusSettings);
   const [refreshing, setRefreshing] = useState(false);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [includeNdfl, setIncludeNdfl] = useState(false);
   const { user } = useAuth();
   useTheme();
   const styles = createStyles();
@@ -293,6 +297,8 @@ export default function StatisticsScreen() {
       };
 
       const currentShifts = currentPayload.shifts as Shift[];
+      setShifts(currentShifts);
+      setIncludeNdfl(taxSettings.includeNdfl);
       setBonusSettings(loadedBonusSettings);
       setStatistics(computeStats(currentShifts, bonusSettingsWithProfileAmount, selectedPeriod === 'month', holidayDateSet, taxSettings.includeNdfl));
 
@@ -457,6 +463,15 @@ export default function StatisticsScreen() {
           <Text style={styles.statLabel}>Среднее за смену</Text>
         </View>
       </View>
+
+      {selectedPeriod === 'month' && (
+          <MonthlyChart
+              shifts={shifts}
+              currentDate={monthPickerDate}
+              includeNdfl={includeNdfl}
+              applyNdfl={applyNdfl}
+          />
+      )}
 
       <View style={styles.dayInsightsCard}>
         <Text style={styles.dayInsightsTitle}>Лучший/худший день недели</Text>
