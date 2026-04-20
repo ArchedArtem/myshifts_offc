@@ -31,6 +31,8 @@ import { ActivityIndicator } from 'react-native';
 import { useShiftSyncStatus } from '@/hooks/useShiftSyncStatus';
 import { syncNow } from '@/services/offlineSync';
 
+import ShiftSkeleton from '@/components/ShiftSkeleton';
+
 
 LocaleConfig.locales.ru = {
     monthNames: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
@@ -131,6 +133,7 @@ export default function CalendarScreen() {
             setShifts((shiftPayload.shifts as Shift[]) ?? []);
         } catch (error) {
             console.error('Error fetching shifts:', error);
+        } finally {
             setLoading(false);
         }
     }, [selectedDate, user]);
@@ -331,9 +334,17 @@ export default function CalendarScreen() {
                     />
                 )}
                 ListEmptyComponent={
-                    <Text style={{ textAlign: 'center', color: Colors.gray, marginTop: 20 }}>
-                        {loading ? 'Загрузка...' : 'Нет смен на эту дату'}
-                    </Text>
+                    loading ? (
+                        <View>
+                            <ShiftSkeleton />
+                            <ShiftSkeleton />
+                            <ShiftSkeleton />
+                        </View>
+                    ) : (
+                        <Text style={{ textAlign: 'center', color: Colors.gray, marginTop: 20 }}>
+                            Нет смен на эту дату
+                        </Text>
+                    )
                 }
                 contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
                 refreshControl={
