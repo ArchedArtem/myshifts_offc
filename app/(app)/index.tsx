@@ -35,6 +35,8 @@ import ShiftSkeleton from '@/components/ShiftSkeleton';
 
 import { Ionicons } from '@expo/vector-icons';
 
+import Reanimated, { FadeIn } from 'react-native-reanimated';
+
 LocaleConfig.locales.ru = {
     monthNames: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
     monthNamesShort: ['янв.', 'февр.', 'март', 'апр.', 'май', 'июнь', 'июль', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.'],
@@ -342,7 +344,10 @@ export default function CalendarScreen() {
                             <ShiftSkeleton />
                         </View>
                     ) : (
-                        <View style={styles.emptyContainer}>
+                        <Reanimated.View
+                            entering={FadeIn.duration(400).delay(100)}
+                            style={styles.emptyContainer}
+                        >
                             <View style={styles.emptyIconCircle}>
                                 <Ionicons name="cafe-outline" size={36} color={Colors.primary} />
                             </View>
@@ -350,7 +355,7 @@ export default function CalendarScreen() {
                             <Text style={styles.emptySubtitle}>
                                 На эту дату смен не найдено.{'\n'}Можно отдыхать или добавить новую.
                             </Text>
-                        </View>
+                        </Reanimated.View>
                     )
                 }
                 contentContainerStyle={{ padding: 16, paddingBottom: 80 }}

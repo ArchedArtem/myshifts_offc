@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
+import Animated, { FadeInUp, FadeOutDown, Layout } from 'react-native-reanimated';
 import Colors from '@/constants/Colors';
 import { calculateDuration, calculateEarnings, formatDuration } from '@/utils/calculations';
 
@@ -40,85 +41,92 @@ export default function ShiftCard({ shift, onPress }: ShiftCardProps) {
     );
 
     return (
-        <TouchableOpacity
-            style={{
-                backgroundColor: Colors.white,
-                borderRadius: 12,
-                padding: 16,
-                marginBottom: 12,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 4,
-                elevation: 3,
-            }}
-            onPress={onPress}
+        <Animated.View
+            entering={FadeInUp.duration(400)}
+            exiting={FadeOutDown.duration(400)}
+            layout={Layout.springify()}
+            style={{ marginBottom: 12 }}
         >
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray }}>
-                    {normalizeTime(shift.start_time)}
-                </Text>
-                <Text style={{ fontSize: 16, color: Colors.gray, marginHorizontal: 8 }}>—</Text>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray }}>
-                    {normalizeTime(shift.end_time)}
-                </Text>
-                <Text style={{ fontSize: 14, color: Colors.gray, marginLeft: 8 }}>
-                    ({getDurationLabel()})
-                </Text>
-            </View>
-
-            <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-                    <Text style={{ fontSize: 14, color: Colors.gray }}>
-                        {shift.hourly_rate} ₽/час
+            <TouchableOpacity
+                style={{
+                    backgroundColor: Colors.white,
+                    borderRadius: 12,
+                    padding: 16,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 3,
+                }}
+                onPress={onPress}
+                activeOpacity={0.7}
+            >
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray }}>
+                        {normalizeTime(shift.start_time)}
                     </Text>
-                    {breakMinutes > 0 && (
-                        <Text style={{ fontSize: 14, color: Colors.gray, marginLeft: 8 }}>
-                            • Перерыв: {breakMinutes} мин
+                    <Text style={{ fontSize: 16, color: Colors.gray, marginHorizontal: 8 }}>—</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray }}>
+                        {normalizeTime(shift.end_time)}
+                    </Text>
+                    <Text style={{ fontSize: 14, color: Colors.gray, marginLeft: 8 }}>
+                        ({getDurationLabel()})
+                    </Text>
+                </View>
+
+                <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                        <Text style={{ fontSize: 14, color: Colors.gray }}>
+                            {shift.hourly_rate} ₽/час
                         </Text>
+                        {breakMinutes > 0 && (
+                            <Text style={{ fontSize: 14, color: Colors.gray, marginLeft: 8 }}>
+                                • Перерыв: {breakMinutes} мин
+                            </Text>
+                        )}
+                        {shift.extra_payment > 0 && (
+                            <Text style={{ fontSize: 14, color: Colors.success, marginLeft: 8, fontWeight: '500' }}>
+                                +{shift.extra_payment} ₽
+                            </Text>
+                        )}
+                    </View>
+
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: Colors.primary, marginBottom: 8 }}>
+                        {earnings.toFixed(2)} ₽
+                    </Text>
+
+                    {shift.sync_state && shift.sync_state !== 'synced' && (
+                        <View
+                            style={{
+                                alignSelf: 'flex-start',
+                                backgroundColor: shift.sync_state === 'error' ? Colors.lightError : Colors.lightPrimary,
+                                borderColor: shift.sync_state === 'error' ? Colors.error : Colors.primary,
+                                borderWidth: 1,
+                                borderRadius: 999,
+                                paddingHorizontal: 10,
+                                paddingVertical: 4,
+                                marginBottom: 8,
+                            }}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: '700',
+                                    color: shift.sync_state === 'error' ? Colors.error : Colors.primary,
+                                }}
+                            >
+                                {shift.sync_state === 'error' ? 'Ошибка синхронизации' : 'Не синхронизировано'}
+                            </Text>
+                        </View>
                     )}
-                    {shift.extra_payment > 0 && (
-                        <Text style={{ fontSize: 14, color: Colors.success, marginLeft: 8, fontWeight: '500' }}>
-                            +{shift.extra_payment} ₽
+
+                    {shift.notes && (
+                        <Text style={{ fontSize: 14, color: Colors.gray, fontStyle: 'italic' }} numberOfLines={1}>
+                            📝 {shift.notes}
                         </Text>
                     )}
                 </View>
-
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: Colors.primary, marginBottom: 8 }}>
-                    {earnings.toFixed(2)} ₽
-                </Text>
-
-                {shift.sync_state && shift.sync_state !== 'synced' && (
-                    <View
-                        style={{
-                            alignSelf: 'flex-start',
-                            backgroundColor: shift.sync_state === 'error' ? Colors.lightError : Colors.lightPrimary,
-                            borderColor: shift.sync_state === 'error' ? Colors.error : Colors.primary,
-                            borderWidth: 1,
-                            borderRadius: 999,
-                            paddingHorizontal: 10,
-                            paddingVertical: 4,
-                            marginBottom: 8,
-                        }}
-                    >
-                        <Text
-                            style={{
-                                fontSize: 12,
-                                fontWeight: '700',
-                                color: shift.sync_state === 'error' ? Colors.error : Colors.primary,
-                            }}
-                        >
-                            {shift.sync_state === 'error' ? 'Ошибка синхронизации' : 'Не синхронизировано'}
-                        </Text>
-                    </View>
-                )}
-
-                {shift.notes && (
-                    <Text style={{ fontSize: 14, color: Colors.gray, fontStyle: 'italic' }} numberOfLines={1}>
-                        📝 {shift.notes}
-                    </Text>
-                )}
-            </View>
-        </TouchableOpacity>
+            </TouchableOpacity>
+        </Animated.View>
     );
 }
