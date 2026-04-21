@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from '@/utils/haptics';
 import Colors from '@/constants/Colors';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -8,6 +10,10 @@ export default function SupportDeveloperScreen() {
   useTheme();
   const router = useRouter();
   const styles = createStyles();
+
+  const [copied, setCopied] = useState(false);
+  const cardNumber = "2200 2404 1967 7543";
+
   const handleBack = () => {
     if (router.canGoBack()) {
       router.back();
@@ -16,23 +22,39 @@ export default function SupportDeveloperScreen() {
     router.replace('/(app)/profile');
   };
 
-  return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.85}>
-        <Text style={styles.backButtonText}>← Назад</Text>
-      </TouchableOpacity>
-      <Text style={styles.title}>Поддержать разработчика ❤️</Text>
-      <Text style={styles.subtitle}>
-        Спасибо за поддержку проекта «Мои смены». Любая сумма помогает развивать приложение.
-      </Text>
+  const handleCopy = async () => {
+    await Clipboard.setStringAsync(cardNumber.replace(/\s/g, ''));
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
 
-      <View style={styles.card}>
-        <Text style={styles.cardLabel}>Реквизиты для перевода</Text>
-        <Text style={styles.bank}>ВТБ</Text>
-        <Text style={styles.cardNumber}>2200 2404 1967 7543</Text>
-        <Text style={styles.hint}>Перевод по номеру карты</Text>
-      </View>
-    </ScrollView>
+  return (
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.85}>
+          <Text style={styles.backButtonText}>← Назад</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>Поддержать разработчика ❤️</Text>
+        <Text style={styles.subtitle}>
+          Спасибо за поддержку проекта «Мои смены». Любая сумма помогает развивать приложение.
+        </Text>
+
+        <TouchableOpacity
+            style={[styles.card, copied && styles.cardCopied]}
+            onPress={handleCopy}
+            activeOpacity={0.8}
+        >
+          <Text style={styles.cardLabel}>Реквизиты для перевода</Text>
+          <Text style={styles.bank}>ВТБ</Text>
+          <Text style={styles.cardNumber}>{cardNumber}</Text>
+
+          <View style={[styles.hintBadge, copied && styles.hintBadgeCopied]}>
+            <Text style={[styles.hint, copied && styles.hintCopied]}>
+              {copied ? '✅ Скопировано!' : 'Нажмите, чтобы скопировать'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </ScrollView>
   );
 }
 
@@ -60,8 +82,22 @@ const createStyles = () => StyleSheet.create({
     padding: 18,
     alignItems: 'center',
   },
+  cardCopied: {
+    borderColor: Colors.success,
+  },
   cardLabel: { fontSize: 13, color: Colors.gray, marginBottom: 8 },
   bank: { fontSize: 18, fontWeight: '700', color: Colors.darkGray, marginBottom: 10 },
-  cardNumber: { fontSize: 28, fontWeight: '800', letterSpacing: 1, color: Colors.primary, marginBottom: 8 },
-  hint: { fontSize: 13, color: Colors.gray },
+  cardNumber: { fontSize: 28, fontWeight: '800', letterSpacing: 1, color: Colors.primary, marginBottom: 12 },
+
+  hintBadge: {
+    backgroundColor: Colors.lightGray,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  hintBadgeCopied: {
+    backgroundColor: Colors.success,
+  },
+  hint: { fontSize: 13, color: Colors.darkGray, fontWeight: '500' },
+  hintCopied: { color: Colors.white, fontWeight: '600' },
 });
