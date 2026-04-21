@@ -10,6 +10,7 @@ import { showLatestUnreadAnnouncement } from '@/services/inAppNotifications';
 import { startShiftSyncEngine, stopShiftSyncEngine } from '@/services/offlineSync';
 import { syncPushTokenForUser } from '@/services/notifications';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
+import ModernLoader from '@/components/ModernLoader';
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
@@ -50,11 +51,7 @@ export default function AppLayout() {
   }, [session?.user?.id]);
 
   if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
+    return <ModernLoader fullScreen={true} />;
   }
 
   if (!session) {

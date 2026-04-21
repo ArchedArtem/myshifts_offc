@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { registerNextShiftWidgetTask } from '@/services/androidWidget';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import ModernLoader from '@/components/ModernLoader';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,11 +31,7 @@ function LayoutInitializer() {
     }, [initialized]);
 
     if (!appIsReady || !initialized) {
-        return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
-                <ActivityIndicator size="large" color={Colors.primary} />
-            </View>
-        );
+        return <ModernLoader fullScreen={true} />;
     }
 
     return <Slot key={theme} />;
