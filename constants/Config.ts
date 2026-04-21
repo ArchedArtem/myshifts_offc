@@ -1,8 +1,11 @@
+if (!process.env.EXPO_PUBLIC_SUPABASE_URL || !process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: Не найдены переменные окружения Supabase в файле .env');
+}
+
 export const Config = {
-    // Supabase Configuration
     supabase: {
-        url: process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://ordhaflngrhvktewbwik.supabase.co',
-        anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yZGhhZmxuZ3Jodmt0ZXdid2lrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4MjE0MjgsImV4cCI6MjA4NDM5NzQyOH0.CfunZTq3JNeEjpzC3x2MpybaqLznorQkzfsHweVEtyY',
+        url: process.env.EXPO_PUBLIC_SUPABASE_URL || '',
+        anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
     },
 
     // App Configuration
@@ -52,4 +55,4 @@ export const Config = {
         maxShiftDuration: 24, // hours
         maxExtraPayment: 100000,
     },
-};
+} as const;
