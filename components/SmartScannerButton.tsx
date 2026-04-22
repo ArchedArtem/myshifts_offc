@@ -249,7 +249,6 @@ export default function SmartScannerButton() {
                                         <Text style={styles.shiftDate}>
                                             {formatScanDate(shift.date)}
                                         </Text>
-                                        {/* Редактируемое название смены */}
                                         <TextInput
                                             style={styles.shiftLabelInput}
                                             value={shift.title}
@@ -261,7 +260,6 @@ export default function SmartScannerButton() {
 
                                     <View style={styles.shiftTimeRow}>
                                         <Clock size={14} color={Colors.gray}/>
-                                        {/* Редактируемое время начала */}
                                         <TextInput
                                             style={styles.timeInput}
                                             value={shift.startTime}
@@ -270,7 +268,6 @@ export default function SmartScannerButton() {
                                             maxLength={5}
                                         />
                                         <Text style={styles.timeSeparator}>—</Text>
-                                        {/* Редактируемое время конца */}
                                         <TextInput
                                             style={styles.timeInput}
                                             value={shift.endTime}
@@ -279,7 +276,6 @@ export default function SmartScannerButton() {
                                             maxLength={5}
                                         />
 
-                                        {/* Редактируемый перерыв */}
                                         <View style={styles.breakEditRow}>
                                             <Text style={styles.shiftBreak}>• ☕</Text>
                                             <TextInput
@@ -324,8 +320,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 8,
-        minWidth: 60,  // Чтобы не исчез, если юзер сотрет текст
-        maxWidth: 100, // Чтобы длинное название не выдавило дату за экран
+        minWidth: 60,
+        maxWidth: 100,
         textAlign: 'center',
     },
     timeInput: {
@@ -337,7 +333,7 @@ const styles = StyleSheet.create({
         paddingVertical: 2,
         borderRadius: 6,
         textAlign: 'center',
-        width: 55, // Время "09:00" всегда состоит из 5 символов. Фиксированная ширина тут идеальна.
+        width: 55,
     },
     timeSeparator: {
         color: Colors.gray,

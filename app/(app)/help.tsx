@@ -5,7 +5,19 @@ import { useTheme } from '@/hooks/useTheme';
 
 const faq = [
   {
-    q: 'Как добавить смену?',
+    q: 'Как работает AI-сканер графиков?',
+    a: 'Нажмите на кнопку «AI Сканер», загрузите скриншот или фото вашего расписания. Нейросеть сама найдет рабочие дни, время начала, окончания и посчитает перерывы.',
+  },
+  {
+    q: 'Можно ли поправить смены после сканирования?',
+    a: 'Да! Когда сканер найдет смены, появится список. Просто нажмите на время, перерыв или название смены, чтобы отредактировать ошибку, а затем нажмите «Добавить все».',
+  },
+  {
+    q: 'Сканер выдает ошибку «Сервера перегружены». Что делать?',
+    a: 'Это временное ограничение нейросети из-за высокой нагрузки. Просто подождите 1-2 минуты и попробуйте снова.',
+  },
+  {
+    q: 'Как добавить смену вручную?',
     a: 'На главном экране нажмите кнопку «+», заполните дату, время, ставку и сохраните.',
   },
   {
@@ -22,7 +34,7 @@ const faq = [
   },
   {
     q: 'Почему сумма отличается от моей?',
-    a: 'Если в настройках включен учет НДФЛ, итог показывается после удержания 13%. Также сумма может меняться из-за перерыва, доплат и округления минут.',
+    a: 'Если в настройках включен учет НДФЛ, итог показывается после удержания 13%. Также сумма может меняться из-за перерывов, доплат и округления минут.',
   },
 ];
 
@@ -37,35 +49,35 @@ export default function HelpScreen() {
       await Linking.openURL(url);
     } catch {
       Alert.alert(
-        'Ошибка',
-        'Не удалось открыть почтовый клиент. Напишите нам вручную: archedartem@gmail.com',
+          'Ошибка',
+          'Не удалось открыть почтовый клиент. Напишите нам вручную: archedartem@gmail.com',
       );
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Помощь</Text>
-      <Text style={styles.subtitle}>Частые вопросы и быстрые способы связи.</Text>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Помощь</Text>
+        <Text style={styles.subtitle}>Частые вопросы и быстрые способы связи.</Text>
 
-      <View style={styles.block}>
-        <Text style={styles.blockTitle}>FAQ</Text>
-        {faq.map((item) => (
-          <View key={item.q} style={styles.faqItem}>
-            <Text style={styles.q}>{item.q}</Text>
-            <Text style={styles.a}>{item.a}</Text>
-          </View>
-        ))}
-      </View>
+        <View style={styles.block}>
+          <Text style={styles.blockTitle}>FAQ</Text>
+          {faq.map((item) => (
+              <View key={item.q} style={styles.faqItem}>
+                <Text style={styles.q}>{item.q}</Text>
+                <Text style={styles.a}>{item.a}</Text>
+              </View>
+          ))}
+        </View>
 
-      <View style={styles.block}>
-        <Text style={styles.blockTitle}>Связаться с поддержкой</Text>
-        <TouchableOpacity style={styles.contactButton} onPress={openEmail}>
-          <Text style={styles.contactButtonText}>Написать на email</Text>
-        </TouchableOpacity>
-        <Text style={styles.note}>Обычно отвечаем в течение 24 часов.</Text>
-      </View>
-    </ScrollView>
+        <View style={styles.block}>
+          <Text style={styles.blockTitle}>Связаться с поддержкой</Text>
+          <TouchableOpacity style={styles.contactButton} onPress={openEmail}>
+            <Text style={styles.contactButtonText}>Написать на email</Text>
+          </TouchableOpacity>
+          <Text style={styles.note}>Обычно отвечаем в течение 24 часов.</Text>
+        </View>
+      </ScrollView>
   );
 }
 
