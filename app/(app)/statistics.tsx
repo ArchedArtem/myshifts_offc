@@ -391,9 +391,9 @@ export default function StatisticsScreen() {
 
   return (
       <View style={styles.background}>
-        <View style={styles.headerBackground}>
-          <Text style={styles.headerTitle}>Статистика</Text>
-        </View>
+        {/*<View style={styles.headerBackground}>*/}
+        {/*  <Text style={styles.headerTitle}>Статистика</Text>*/}
+        {/*</View>*/}
 
         <ScrollView
             style={styles.scrollFlex}

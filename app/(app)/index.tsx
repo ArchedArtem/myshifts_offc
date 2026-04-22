@@ -408,6 +408,7 @@ export default function CalendarScreen() {
                     <View style={styles.shiftCardContainer}>
                         <ShiftCard
                             shift={item}
+                            includeNdfl={includeNdfl}
                             onPress={() => setSelectedShift(item)}
                             onEdit={() => {
                                 router.push({

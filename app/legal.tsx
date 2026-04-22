@@ -1,10 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
+  Platform
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/services/supabase/client';
 import Colors from '@/constants/Colors';
 import { useTheme } from '@/hooks/useTheme';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from '@/utils/haptics';
 
 type Section = {
   title: string;
@@ -101,7 +111,7 @@ const defaultTermsSections: Section[] = [
     ],
   },
   {
-    title: '4. Добровольная финансовая поддержки',
+    title: '4. Добровольная финансовая поддержка',
     items: [
       '4.1. Пользователь вправе по собственной инициативе оказать добровольную финансовую поддержку разработчику проекта.',
       '4.2. Добровольная финансовая поддержка не является оплатой услуг, покупкой цифровых товаров или подпиской.',
@@ -125,7 +135,6 @@ const defaultTermsSections: Section[] = [
     ],
   },
 ];
-
 
 export default function LegalScreen() {
   useTheme();
@@ -171,7 +180,7 @@ export default function LegalScreen() {
         }
 
       } catch (error) {
-        console.error('Ошибка загрузки документов:', error);
+        console.error(error);
         if (sections.length === 0) {
           setSections(isTerms ? defaultTermsSections : defaultPrivacySections);
         }
@@ -184,6 +193,7 @@ export default function LegalScreen() {
   }, [docType]);
 
   const handleBack = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (router.canGoBack()) {
       router.back();
       return;
@@ -193,18 +203,22 @@ export default function LegalScreen() {
 
   return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.85}>
-          <Text style={styles.backButtonText}>← Назад</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.intro}>{intro}</Text>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={20} color={Colors.primary} />
+            <Text style={styles.backButtonText}>Назад</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.intro}>{intro}</Text>
+        </View>
 
         {isLoading && sections.length === 0 ? (
-            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+            <View style={styles.loaderWrap}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
         ) : (
-            sections.map((section) => (
-                <View key={section.title} style={styles.section}>
+            sections.map((section, index) => (
+                <View key={section.title} style={styles.sectionCard}>
                   <Text style={styles.sectionTitle}>{section.title}</Text>
                   {section.items.map((item, idx) => (
                       <Text key={idx} style={styles.paragraph}>{item}</Text>
@@ -216,31 +230,77 @@ export default function LegalScreen() {
   );
 }
 
-
 const createStyles = () => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: 16, paddingBottom: 30 },
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background
+  },
+  content: {
+    paddingBottom: 40
+  },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+  },
   backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
     backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  backButtonText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
-  title: { fontSize: 26, fontWeight: '800', color: Colors.darkGray, marginBottom: 10 },
-  intro: { fontSize: 14, lineHeight: 21, color: Colors.gray, marginBottom: 12 },
-  section: {
-    backgroundColor: Colors.white,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 14,
-    marginBottom: 10,
+    marginBottom: 16,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.darkGray, marginBottom: 8 },
-  paragraph: { fontSize: 14, lineHeight: 21, color: Colors.darkGray, marginBottom: 6 },
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginLeft: 4,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.darkGray,
+    marginBottom: 10
+  },
+  intro: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: Colors.gray
+  },
+  sectionCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 20,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.darkGray,
+    marginBottom: 12
+  },
+  paragraph: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: Colors.darkGray,
+    marginBottom: 8
+  },
+  loaderWrap: {
+    marginTop: 40,
+    alignItems: 'center'
+  }
 });

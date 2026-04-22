@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,6 +20,8 @@ import {
   deleteCustomShiftTemplate,
   loadCustomShiftTemplates,
 } from '@/services/shiftTemplates';
+import * as Haptics from '@/utils/haptics';
+import { Ionicons } from '@expo/vector-icons';
 
 const emptyForm = {
   name: '',
@@ -29,23 +32,31 @@ const emptyForm = {
 
 const isValidTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 
+const formatTimeInput = (value: string) => {
+  const digits = value.replace(/[^0-9]/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+};
+
 export default function ShiftTemplatesScreen() {
   const [customTemplates, setCustomTemplates] = useState<ShiftTemplate[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [loadingInitial, setLoadingInitial] = useState(true);
   const { user } = useAuth();
   useTheme();
   const styles = createStyles();
 
-
   const loadTemplates = useCallback(async () => {
     if (!user) return;
-
+    setLoadingInitial(true);
     try {
       const data = await loadCustomShiftTemplates(user.id);
       setCustomTemplates(data);
     } catch (error: any) {
       Alert.alert('Ошибка', error.message || 'Не удалось загрузить шаблоны');
+    } finally {
+      setLoadingInitial(false);
     }
   }, [user]);
 
@@ -75,6 +86,7 @@ export default function ShiftTemplatesScreen() {
     }
 
     setSaving(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const created = await createCustomShiftTemplate(user.id, {
         name,
@@ -85,8 +97,9 @@ export default function ShiftTemplatesScreen() {
 
       setCustomTemplates((prev) => [...prev, created]);
       setForm(emptyForm);
-      Alert.alert('Готово', 'Шаблон сохранен');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Ошибка', error.message || 'Не удалось сохранить шаблон');
     } finally {
       setSaving(false);
@@ -102,6 +115,7 @@ export default function ShiftTemplatesScreen() {
         text: 'Удалить',
         style: 'destructive',
         onPress: async () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           try {
             await deleteCustomShiftTemplate(templateId, user.id);
             setCustomTemplates((prev) => prev.filter((item) => item.id !== templateId));
@@ -113,108 +127,243 @@ export default function ShiftTemplatesScreen() {
     ]);
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text style={styles.title}>Шаблоны смен</Text>
-        <Text style={styles.subtitle}>Создавай свои шаблоны, чтобы быстрее заполнять смены.</Text>
-
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Мои шаблоны</Text>
-          {customTemplates.length === 0 ? (
-            <Text style={styles.emptyText}>Пока нет своих шаблонов</Text>
-          ) : customTemplates.map((template) => (
-            <View key={template.id} style={styles.templateRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.templateName}>{template.name}</Text>
-                <Text style={styles.templateMeta}>{template.startTime}–{template.endTime} · перерыв {template.breakMinutes} мин</Text>
-              </View>
-              <TouchableOpacity onPress={() => handleDeleteTemplate(template.id)}>
-                <Text style={styles.deleteText}>Удалить</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
+  if (loadingInitial) {
+    return (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
         </View>
+    );
+  }
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Новый шаблон</Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Название (например Офис 12-20)"
-            placeholderTextColor={Colors.gray}
-            value={form.name}
-            onChangeText={(name) => setForm((prev) => ({ ...prev, name }))}
-          />
-
-          <View style={styles.row}>
-            <TextInput
-              style={[styles.input, styles.halfInput]}
-              placeholder="Начало 09:00"
-              placeholderTextColor={Colors.gray}
-              value={form.startTime}
-              onChangeText={(startTime) => setForm((prev) => ({ ...prev, startTime }))}
-            />
-            <TextInput
-              style={[styles.input, styles.halfInput]}
-              placeholder="Конец 17:00"
-              placeholderTextColor={Colors.gray}
-              value={form.endTime}
-              onChangeText={(endTime) => setForm((prev) => ({ ...prev, endTime }))}
-            />
+  return (
+      <KeyboardAvoidingView
+          style={styles.screen}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+      >
+        <ScrollView
+            style={styles.screen}
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Шаблоны смен</Text>
+            <Text style={styles.subtitle}>
+              Создавайте свои шаблоны, чтобы мгновенно заполнять данные о сменах при их добавлении.
+            </Text>
           </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Перерыв (мин)"
-            placeholderTextColor={Colors.gray}
-            keyboardType="numeric"
-            value={form.breakMinutes}
-            onChangeText={(breakMinutes) => {
-              const digitsOnly = breakMinutes.replace(/[^0-9]/g, '');
-              if (!digitsOnly) {
-                setForm((prev) => ({ ...prev, breakMinutes: '0' }));
-                return;
-              }
-              const normalized = String(Math.min(120, Math.max(0, parseInt(digitsOnly, 10))));
-              setForm((prev) => ({ ...prev, breakMinutes: normalized }));
-            }}
-          />
+          {/* Форма создания */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Новый шаблон</Text>
 
-          <TouchableOpacity style={[styles.addButton, saving && styles.disabled]} onPress={handleAddTemplate} disabled={saving}>
-            <Text style={styles.addButtonText}>{saving ? 'Сохранение...' : 'Сохранить шаблон'}</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <Text style={styles.label}>Название</Text>
+            <TextInput
+                style={styles.input}
+                placeholder="Например: Дневная смена"
+                placeholderTextColor={Colors.gray}
+                value={form.name}
+                onChangeText={(name) => setForm((prev) => ({ ...prev, name }))}
+            />
+
+            <View style={styles.row}>
+              <View style={styles.halfWidth}>
+                <Text style={styles.label}>Начало</Text>
+                <TextInput
+                    style={styles.input}
+                    placeholder="09:00"
+                    placeholderTextColor={Colors.gray}
+                    keyboardType="number-pad"
+                    value={form.startTime}
+                    onChangeText={(startTime) => setForm((prev) => ({ ...prev, startTime: formatTimeInput(startTime) }))}
+                />
+              </View>
+              <View style={styles.halfWidth}>
+                <Text style={styles.label}>Конец</Text>
+                <TextInput
+                    style={styles.input}
+                    placeholder="17:00"
+                    placeholderTextColor={Colors.gray}
+                    keyboardType="number-pad"
+                    value={form.endTime}
+                    onChangeText={(endTime) => setForm((prev) => ({ ...prev, endTime: formatTimeInput(endTime) }))}
+                />
+              </View>
+            </View>
+
+            <Text style={styles.label}>Перерыв (минуты)</Text>
+            <TextInput
+                style={styles.input}
+                placeholder="0"
+                placeholderTextColor={Colors.gray}
+                keyboardType="numeric"
+                value={form.breakMinutes}
+                onChangeText={(breakMinutes) => {
+                  const digitsOnly = breakMinutes.replace(/[^0-9]/g, '');
+                  if (!digitsOnly) {
+                    setForm((prev) => ({ ...prev, breakMinutes: '0' }));
+                    return;
+                  }
+                  const normalized = String(Math.min(120, Math.max(0, parseInt(digitsOnly, 10))));
+                  setForm((prev) => ({ ...prev, breakMinutes: normalized }));
+                }}
+            />
+
+            <TouchableOpacity
+                style={[styles.addButton, saving && styles.disabled]}
+                onPress={handleAddTemplate}
+                disabled={saving}
+                activeOpacity={0.8}
+            >
+              {saving ? (
+                  <ActivityIndicator color={Colors.onPrimary} />
+              ) : (
+                  <Text style={styles.addButtonText}>Сохранить шаблон</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Список шаблонов */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Мои шаблоны</Text>
+            {customTemplates.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="document-outline" size={48} color={Colors.border} />
+                  <Text style={styles.emptyText}>У вас пока нет сохраненных шаблонов.</Text>
+                </View>
+            ) : customTemplates.map((template, index) => (
+                <View key={template.id} style={[styles.templateRow, index === customTemplates.length - 1 && styles.lastTemplateRow]}>
+                  <View style={styles.templateInfo}>
+                    <Text style={styles.templateName}>{template.name}</Text>
+                    <Text style={styles.templateMeta}>
+                      ⏰ {template.startTime} — {template.endTime}
+                    </Text>
+                    {template.breakMinutes > 0 && (
+                        <Text style={styles.templateMetaBreak}>
+                          ☕ Перерыв: {template.breakMinutes} мин
+                        </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDeleteTemplate(template.id)}
+                      activeOpacity={0.7}
+                  >
+                    <Ionicons name="trash-outline" size={20} color={Colors.error} />
+                  </TouchableOpacity>
+                </View>
+            ))}
+          </View>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
   );
 }
 
 const createStyles = () => StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: '700', color: Colors.darkGray },
-  subtitle: { marginTop: 6, fontSize: 14, color: Colors.gray },
-  card: {
-    marginTop: 14,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 14,
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+  content: {
+    paddingBottom: 40
+  },
+  loaderContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
     color: Colors.darkGray,
-    marginBottom: 10,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: Colors.gray,
+    lineHeight: 20
+  },
+  card: {
+    backgroundColor: Colors.white,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.darkGray,
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.darkGray,
+    marginBottom: 8,
+    marginTop: 12
+  },
+  input: {
+    backgroundColor: Colors.lightGray,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: Colors.darkGray,
+    fontWeight: '500',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfWidth: {
+    flex: 1,
+  },
+  addButton: {
+    marginTop: 24,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    paddingVertical: 16,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  addButtonText: {
+    color: Colors.onPrimary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  disabled: {
+    opacity: 0.7,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  emptyText: {
+    color: Colors.gray,
+    fontSize: 14,
+    marginTop: 12,
+    textAlign: 'center',
   },
   templateRow: {
     flexDirection: 'row',
@@ -222,57 +371,35 @@ const createStyles = () => StyleSheet.create({
     justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    paddingVertical: 10,
-    gap: 8,
+    paddingVertical: 16,
+  },
+  lastTemplateRow: {
+    borderBottomWidth: 0,
+    paddingBottom: 0,
+  },
+  templateInfo: {
+    flex: 1,
+    paddingRight: 16,
   },
   templateName: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: Colors.darkGray,
+    marginBottom: 4,
   },
   templateMeta: {
-    marginTop: 2,
+    color: Colors.darkGray,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  templateMetaBreak: {
+    marginTop: 4,
     color: Colors.gray,
     fontSize: 13,
   },
-  emptyText: {
-    color: Colors.gray,
-    fontSize: 14,
-  },
-  deleteText: {
-    color: Colors.error,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
-    backgroundColor: Colors.white,
-    color: Colors.darkGray,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  halfInput: {
-    flex: 1,
-  },
-  addButton: {
-    marginTop: 4,
-    borderRadius: 10,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    padding: 12,
-  },
-  addButtonText: {
-    color: Colors.onPrimary,
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  disabled: {
-    opacity: 0.7,
+  deleteButton: {
+    padding: 10,
+    backgroundColor: Colors.lightError,
+    borderRadius: 12,
   },
 });

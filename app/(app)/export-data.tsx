@@ -8,12 +8,15 @@ import {
   Alert,
   Share,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import * as Haptics from '@/utils/haptics';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
 import { getAllShiftsOfflineAware } from '@/services/offlineShifts';
 import { useTheme } from '@/hooks/useTheme';
+import { Ionicons } from '@expo/vector-icons';
 
 type Period = 'month' | 'year' | 'all';
 
@@ -40,7 +43,7 @@ export default function ExportDataScreen() {
   const periodLabel = useMemo(() => {
     if (period === 'month') return 'Текущий месяц';
     if (period === 'year') return 'Последние 12 месяцев';
-    return 'Все время';
+    return 'За всё время';
   }, [period]);
 
   const fetchShifts = useCallback(async (): Promise<ShiftRow[]> => {
@@ -61,8 +64,8 @@ export default function ExportDataScreen() {
     }
 
     return rows
-      .slice()
-      .sort((a, b) => `${a.date} ${normalizeTime(a.start_time)}`.localeCompare(`${b.date} ${normalizeTime(b.start_time)}`));
+        .slice()
+        .sort((a, b) => `${a.date} ${normalizeTime(a.start_time)}`.localeCompare(`${b.date} ${normalizeTime(b.start_time)}`));
   }, [period, user]);
 
   const buildPrettyExportText = (rows: ShiftRow[]) => {
@@ -92,11 +95,13 @@ export default function ExportDataScreen() {
 
   const handleExport = async () => {
     try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setLoading(true);
       const rows = await fetchShifts();
       setLastCount(rows.length);
 
       if (!rows.length) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         Alert.alert('Нет данных', 'За выбранный период смен не найдено.');
         return;
       }
@@ -106,7 +111,9 @@ export default function ExportDataScreen() {
         title: 'Экспорт смен MyShifts',
         message: prettyText,
       });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Ошибка', error.message || 'Не удалось экспортировать данные');
     } finally {
       setLoading(false);
@@ -114,61 +121,192 @@ export default function ExportDataScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Экспорт данных</Text>
-      <Text style={styles.subtitle}>Экспортируйте смены в красиво оформленный текст и отправьте через меню «Поделиться».</Text>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Экспорт данных</Text>
+          <Text style={styles.subtitle}>
+            Сохраните свои смены в виде красиво оформленного текста и отправьте куда угодно через системное меню «Поделиться».
+          </Text>
+        </View>
 
-      <View style={styles.periodRow}>
-        {(['month', 'year', 'all'] as const).map((item) => (
-          <TouchableOpacity
-            key={item}
-            style={[styles.periodButton, period === item && styles.periodButtonActive]}
-            onPress={() => setPeriod(item)}
+        <View style={styles.periodControlWrap}>
+          <View style={styles.segmentedControl}>
+            {(['month', 'year', 'all'] as const).map((item) => (
+                <TouchableOpacity
+                    key={item}
+                    style={[styles.segmentButton, period === item && styles.segmentButtonActive]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setPeriod(item);
+                    }}
+                    disabled={loading}
+                    activeOpacity={0.8}
+                >
+                  <Text style={[styles.segmentText, period === item && styles.segmentTextActive]}>
+                    {item === 'month' ? 'Месяц' : item === 'year' ? 'Год' : 'Всё время'}
+                  </Text>
+                </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardIconWrap}>
+            <Ionicons name="document-text-outline" size={28} color={Colors.primary} />
+          </View>
+          <View style={styles.cardInfo}>
+            <Text style={styles.cardTitle}>Выбранный период</Text>
+            <Text style={styles.cardText}>{periodLabel}</Text>
+            {lastCount !== null && (
+                <Text style={styles.cardSubText}>Последний экспорт: {lastCount} смен</Text>
+            )}
+          </View>
+        </View>
+
+        <TouchableOpacity
+            style={[styles.exportButton, loading && styles.disabled]}
+            onPress={handleExport}
             disabled={loading}
-          >
-            <Text style={[styles.periodText, period === item && styles.periodTextActive]}>
-              {item === 'month' ? 'Месяц' : item === 'year' ? 'Год' : 'Все'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Выбранный период</Text>
-        <Text style={styles.cardText}>{periodLabel}</Text>
-        {lastCount !== null && <Text style={styles.cardText}>Последний экспорт: {lastCount} смен</Text>}
-      </View>
-
-      <TouchableOpacity style={[styles.exportButton, loading && styles.disabled]} onPress={handleExport} disabled={loading}>
-        {loading ? <ActivityIndicator color={Colors.onPrimary} /> : <Text style={styles.exportButtonText}>Экспортировать текст</Text>}
-      </TouchableOpacity>
-    </ScrollView>
+            activeOpacity={0.8}
+        >
+          {loading ? (
+              <ActivityIndicator color={Colors.onPrimary} />
+          ) : (
+              <>
+                <Ionicons name="share-outline" size={20} color={Colors.onPrimary} style={styles.exportIcon} />
+                <Text style={styles.exportButtonText}>Сгенерировать текст</Text>
+              </>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
   );
 }
 
 const createStyles = () => StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: '700', color: Colors.darkGray, marginBottom: 8 },
-  subtitle: { fontSize: 14, color: Colors.gray, marginBottom: 16 },
-  periodRow: { flexDirection: 'row', marginBottom: 16 },
-  periodButton: {
+  screen: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginHorizontal: 4,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.background
   },
-  periodButtonActive: { borderColor: Colors.primary, backgroundColor: Colors.lightPrimary },
-  periodText: { color: Colors.gray, fontSize: 14 },
-  periodTextActive: { color: Colors.primary, fontWeight: '600' },
-  card: { backgroundColor: Colors.white, borderRadius: 12, padding: 16, marginBottom: 16 },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: Colors.darkGray, marginBottom: 8 },
-  cardText: { fontSize: 14, color: Colors.gray },
-  exportButton: { backgroundColor: Colors.primary, borderRadius: 10, alignItems: 'center', padding: 14 },
-  exportButtonText: { color: Colors.onPrimary, fontWeight: '600', fontSize: 16 },
-  disabled: { opacity: 0.7 },
+  content: {
+    paddingBottom: 40
+  },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.darkGray,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: Colors.gray,
+    lineHeight: 20
+  },
+  periodControlWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: Colors.lightGray,
+    borderRadius: 12,
+    padding: 4,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  segmentButtonActive: {
+    backgroundColor: Colors.white,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  segmentText: {
+    fontSize: 13,
+    color: Colors.gray,
+    fontWeight: '600',
+  },
+  segmentTextActive: {
+    color: Colors.primary,
+    fontWeight: '800',
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    marginHorizontal: 16,
+    marginBottom: 24,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  cardIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.lightPrimary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  cardInfo: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.gray,
+    marginBottom: 4
+  },
+  cardText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.darkGray
+  },
+  cardSubText: {
+    marginTop: 6,
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '500',
+  },
+  exportButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    alignItems: 'center',
+    paddingVertical: 16,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  exportIcon: {
+    marginRight: 8,
+  },
+  exportButtonText: {
+    color: Colors.onPrimary,
+    fontWeight: '700',
+    fontSize: 16
+  },
+  disabled: {
+    opacity: 0.7,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
 });

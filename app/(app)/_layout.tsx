@@ -1,9 +1,8 @@
 import React, { useEffect } from 'react';
 import { Tabs, Redirect } from 'expo-router';
 import { Calendar, BarChart3, User } from 'lucide-react-native';
-import { ActivityIndicator, View } from 'react-native';
+import { View, Platform, StyleSheet } from 'react-native';
 import Colors from '@/constants/Colors';
-import ShiftSyncBanner from '@/components/ShiftSyncBanner';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { showLatestUnreadAnnouncement } from '@/services/inAppNotifications';
@@ -11,6 +10,7 @@ import { startShiftSyncEngine, stopShiftSyncEngine } from '@/services/offlineSyn
 import { syncPushTokenForUser } from '@/services/notifications';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import ModernLoader from '@/components/ModernLoader';
+import * as Haptics from '@/utils/haptics';
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
@@ -28,7 +28,7 @@ export default function AppLayout() {
           console.warn('Push token sync skipped:', result.reason);
         }
       } catch {
-        // Не блокируем приложение, если сеть недоступна или push временно не синхронизирован.
+        // Игнорируем ошибки сети
       }
     };
 
@@ -59,43 +59,52 @@ export default function AppLayout() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      {/*<ShiftSyncBanner userId={session.user.id} />*/}
-
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: Colors.background }}>
         <Tabs
-          key={theme}
-          screenOptions={{
-            tabBarActiveTintColor: Colors.primary,
-            tabBarInactiveTintColor: Colors.gray,
-            tabBarStyle: {
-              backgroundColor: Colors.white,
-              borderTopColor: Colors.border,
-            },
-            headerShown: false,
-          }}
+            key={theme}
+            screenOptions={{
+              tabBarActiveTintColor: Colors.primary,
+              tabBarInactiveTintColor: Colors.gray,
+              tabBarShowLabel: true, // Названия включены
+              tabBarLabelStyle: styles.tabLabel,
+              tabBarStyle: styles.tabBar,
+              headerShown: false,
+            }}
+            screenListeners={{
+              state: () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              },
+            }}
         >
           <Tabs.Screen
-            name="index"
-            options={{
-              title: 'Календарь',
-              tabBarIcon: ({ color, size }) => <Calendar size={size} color={color} />,
-            }}
+              name="index"
+              options={{
+                title: 'Календарь',
+                tabBarIcon: ({ color, focused }) => (
+                    <Calendar size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+                ),
+              }}
           />
           <Tabs.Screen
-            name="statistics"
-            options={{
-              title: 'Статистика',
-              tabBarIcon: ({ color, size }) => <BarChart3 size={size} color={color} />,
-            }}
+              name="statistics"
+              options={{
+                title: 'Статистика',
+                tabBarIcon: ({ color, focused }) => (
+                    <BarChart3 size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+                ),
+              }}
           />
           <Tabs.Screen
-            name="profile"
-            options={{
-              title: 'Профиль',
-              tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
-            }}
+              name="profile"
+              options={{
+                title: 'Профиль',
+                tabBarIcon: ({ color, focused }) => (
+                    <User size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+                ),
+              }}
           />
+
+          {/* Скрытые экраны */}
           <Tabs.Screen name="shift-edit" options={{ href: null }} />
           <Tabs.Screen name="settings" options={{ href: null }} />
           <Tabs.Screen name="notifications" options={{ href: null }} />
@@ -109,6 +118,25 @@ export default function AppLayout() {
           <Tabs.Screen name="admin-push" options={{ href: null }} />
         </Tabs>
       </View>
-    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: Colors.white,
+    borderTopWidth: 0,
+    height: Platform.OS === 'ios' ? 88 : 78,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 12,
+    paddingTop: 10,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 20,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+});

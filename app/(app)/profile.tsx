@@ -7,6 +7,7 @@ import {
     ScrollView,
     StyleSheet,
     Switch,
+    Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
@@ -115,7 +116,7 @@ export default function ProfileScreen() {
     const isAdmin = (user?.email || '').toLowerCase() === ADMIN_EMAIL;
 
     return (
-        <ScrollView style={styles.screen}>
+        <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
             <View style={styles.header}>
                 <View style={styles.avatar}>
                     <Text style={styles.avatarText}>{avatarChar}</Text>
@@ -124,71 +125,68 @@ export default function ProfileScreen() {
                 {hasName ? (
                     <>
                         <Text style={styles.headerName}>{profile.full_name}</Text>
-                        <Text style={styles.headerEmailSub}>{profile.email || 'Загрузка...'}</Text>
+                        <Text style={styles.headerEmail}>{profile.email || 'Загрузка...'}</Text>
                     </>
                 ) : (
-                    <Text style={styles.headerEmail}>{profile.email || 'Загрузка...'}</Text>
+                    <Text style={styles.headerName}>{profile.email || 'Загрузка...'}</Text>
                 )}
             </View>
 
             <View style={styles.menuCard}>
                 <View style={styles.themeRow}>
-                    <View>
+                    <View style={styles.themeTextWrap}>
                         <Text style={styles.menuItemText}>🌙 Темная тема</Text>
                         <Text style={styles.themeHint}>Включает темный режим приложения</Text>
                     </View>
                     <Switch
                         value={theme === 'dark'}
                         onValueChange={toggleTheme}
-                        thumbColor={theme === 'dark' ? Colors.primary : '#f4f3f4'}
-                        trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
+                        thumbColor={theme === 'dark' ? Colors.white : Colors.white}
+                        trackColor={{ false: Colors.border, true: Colors.primary }}
                     />
                 </View>
-                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./settings')}>
+                <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => router.push('./settings')}>
                     <Text style={styles.menuItemText}>⚙️ Настройки</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./notifications')}>
+                <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => router.push('./notifications')}>
                     <Text style={styles.menuItemText}>🔔 Уведомления</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./export-data')}>
+                <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => router.push('./export-data')}>
                     <Text style={styles.menuItemText}>📤 Экспорт данных</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./shift-templates')}>
+                <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => router.push('./shift-templates')}>
                     <Text style={styles.menuItemText}>🗂️ Шаблоны смен</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./holidays')}>
+                <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => router.push('./holidays')}>
                     <Text style={styles.menuItemText}>🎉 Праздники</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./widgets')}>
+                <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => router.push('./widgets')}>
                     <Text style={styles.menuItemText}>🧩 Виджеты</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./help')}>
+                <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => router.push('./help')}>
                     <Text style={styles.menuItemText}>❓ Помощь</Text>
                 </TouchableOpacity>
                 {isAdmin && (
                     <>
-                        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./admin-notifications')}>
+                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => router.push('./admin-notifications')}>
                             <Text style={styles.menuItemText}>📣 Админ-панель уведомлений</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./admin-push')}>
+                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => router.push('./admin-push')}>
                             <Text style={styles.menuItemText}>🚀 Админ-панель push</Text>
                         </TouchableOpacity>
                     </>
                 )}
-                <TouchableOpacity style={styles.menuItemLast} onPress={() => router.push('./documents')}>
+                <TouchableOpacity style={styles.menuItemLast} activeOpacity={0.7} onPress={() => router.push('./documents')}>
                     <Text style={styles.menuItemText}>📚 Документы</Text>
                 </TouchableOpacity>
             </View>
 
-            <View style={styles.card}>
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} disabled={loading}>
+            <View style={styles.actionCard}>
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} disabled={loading} activeOpacity={0.8}>
                     <Text style={styles.logoutButtonText}>{loading ? 'Выход...' : 'Выйти из аккаунта'}</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.supportButton} activeOpacity={0.85}
-                                  onPress={() => {
-                                      router.push('/support-developer');
-                                  }}>
+                <TouchableOpacity style={styles.supportButton} onPress={() => router.push('/support-developer')} activeOpacity={0.8}>
                     <Text style={styles.supportButtonText}>Поддержать разработчика ❤️</Text>
                 </TouchableOpacity>
             </View>
@@ -205,54 +203,63 @@ const createStyles = () => StyleSheet.create({
         flex: 1,
         backgroundColor: Colors.background,
     },
+    scrollContent: {
+        paddingBottom: 40,
+    },
     header: {
-        backgroundColor: Colors.primary,
-        padding: 30,
+        paddingTop: Platform.OS === 'ios' ? 70 : 50,
+        paddingBottom: 24,
         alignItems: 'center',
+        backgroundColor: Colors.background,
     },
     avatar: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: Colors.white,
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+        backgroundColor: Colors.lightPrimary,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 15,
+        marginBottom: 16,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
     },
     avatarText: {
-        fontSize: 32,
-        fontWeight: 'bold',
+        fontSize: 36,
+        fontWeight: '800',
         color: Colors.primary,
     },
     headerName: {
-        fontSize: 22,
-        color: Colors.onPrimary,
-        fontWeight: '700',
+        fontSize: 24,
+        color: Colors.darkGray,
+        fontWeight: '800',
+        textAlign: 'center',
+        paddingHorizontal: 20,
     },
     headerEmail: {
-        fontSize: 18,
-        color: Colors.onPrimary,
+        fontSize: 15,
+        color: Colors.gray,
         fontWeight: '500',
+        marginTop: 6,
     },
-    headerEmailSub: {
-        fontSize: 14,
-        color: Colors.onPrimary,
-        opacity: 0.9,
-        marginTop: 4,
-    },
+
     menuCard: {
         backgroundColor: Colors.white,
-        marginTop: 20,
         marginHorizontal: 16,
-        borderRadius: 12,
-    },
-    menuItem: {
-        padding: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
+        borderRadius: 20,
+        paddingVertical: 8,
+        shadowColor: Colors.black,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 3,
+        marginBottom: 20,
     },
     themeRow: {
-        padding: 20,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
         borderBottomWidth: 1,
         borderBottomColor: Colors.border,
         flexDirection: 'row',
@@ -260,71 +267,76 @@ const createStyles = () => StyleSheet.create({
         justifyContent: 'space-between',
         gap: 8,
     },
+    themeTextWrap: {
+        flex: 1,
+    },
     themeHint: {
         fontSize: 12,
         color: Colors.gray,
         marginTop: 4,
     },
+    menuItem: {
+        paddingVertical: 18,
+        paddingHorizontal: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border,
+    },
     menuItemLast: {
-        padding: 20,
+        paddingVertical: 18,
+        paddingHorizontal: 20,
     },
     menuItemText: {
         fontSize: 16,
         color: Colors.darkGray,
-    },
-    card: {
-        backgroundColor: Colors.white,
-        marginTop: 20,
-        marginHorizontal: 16,
-        borderRadius: 12,
-        padding: 20,
-        marginBottom: 30,
-    },
-    dangerTitle: {
-        fontSize: 18,
         fontWeight: '600',
-        color: Colors.error,
-        marginBottom: 20,
     },
-    // ... стили logoutButton оставляем как есть ...
+
+    actionCard: {
+        backgroundColor: Colors.white,
+        marginHorizontal: 16,
+        borderRadius: 20,
+        padding: 20,
+        shadowColor: Colors.black,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 3,
+        marginBottom: 24,
+    },
     logoutButton: {
         backgroundColor: Colors.lightGray,
-        padding: 16,
-        borderRadius: 8,
+        paddingVertical: 16,
+        borderRadius: 12,
         alignItems: 'center',
     },
     logoutButtonText: {
         fontSize: 16,
-        fontWeight: '500',
+        fontWeight: '700',
         color: Colors.darkGray,
     },
     supportButton: {
-        marginTop: 16, // Чуть увеличил отступ от кнопки выхода
-        borderWidth: 1,
+        marginTop: 16,
+        borderWidth: 1.5,
         borderColor: Colors.border,
-        paddingVertical: 12, // Сделал чуть комфортнее для нажатия
-        paddingHorizontal: 16,
-        borderRadius: 999,
-        alignSelf: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
         backgroundColor: Colors.white,
     },
     supportButtonText: {
-        fontSize: 14,
+        fontSize: 15,
         color: Colors.primary,
-        fontWeight: '600',
+        fontWeight: '700',
     },
 
-    // Новые стили для удаления аккаунта
     deleteAccountLink: {
         alignSelf: 'center',
         paddingVertical: 16,
         paddingHorizontal: 20,
-        marginBottom: 30, // Отступ от самого низа экрана
     },
     deleteAccountText: {
         fontSize: 14,
-        color: Colors.gray, // Серый цвет делает её менее "кричащей", но текст понятен
-        fontWeight: '500',
+        color: Colors.gray,
+        fontWeight: '600',
     },
-
 });

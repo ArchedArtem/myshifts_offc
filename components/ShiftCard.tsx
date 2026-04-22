@@ -4,7 +4,7 @@ import Animated, { FadeInUp, FadeOutDown, Layout } from 'react-native-reanimated
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/Colors';
-import { calculateDuration, calculateEarnings, formatDuration } from '@/utils/calculations';
+import { applyNdfl, calculateDuration, calculateEarnings, formatDuration } from '@/utils/calculations';
 import * as Haptics from '@/utils/haptics';
 
 interface ShiftCardProps {
@@ -19,12 +19,13 @@ interface ShiftCardProps {
         notes?: string | null;
         sync_state?: 'synced' | 'pending' | 'error';
     };
+    includeNdfl?: boolean;
     onPress: () => void;
     onEdit?: () => void;
     onDelete?: () => void;
 }
 
-export default function ShiftCard({ shift, onPress, onEdit, onDelete }: ShiftCardProps) {
+export default function ShiftCard({ shift, includeNdfl = false, onPress, onEdit, onDelete }: ShiftCardProps) {
     const swipeableRef = useRef<Swipeable>(null);
 
     const normalizeTime = (time: string) => time.split(':').slice(0, 2).join(':');
@@ -39,13 +40,15 @@ export default function ShiftCard({ shift, onPress, onEdit, onDelete }: ShiftCar
         return formatDuration(durationInHours);
     };
 
-    const earnings = calculateEarnings(
+    const grossEarnings = calculateEarnings(
         normalizeTime(shift.start_time),
         normalizeTime(shift.end_time),
         shift.hourly_rate ?? 0,
         shift.extra_payment ?? 0,
         breakMinutes,
     );
+
+    const finalEarnings = applyNdfl(grossEarnings, includeNdfl);
 
     const renderLeftActions = (progress: any, dragX: any) => {
         const scale = dragX.interpolate({
@@ -145,7 +148,7 @@ export default function ShiftCard({ shift, onPress, onEdit, onDelete }: ShiftCar
                         </View>
 
                         <Text style={styles.earningsText}>
-                            {earnings.toFixed(2)} ₽
+                            {finalEarnings.toFixed(2)} ₽
                         </Text>
 
                         {shift.sync_state && shift.sync_state !== 'synced' && (

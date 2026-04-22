@@ -39,6 +39,7 @@ const clampDay = (value: string, fallback: number) => String(Math.max(1, Math.mi
 
 export default function SettingsScreen() {
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const [form, setForm] = useState<ProfileForm>({
     email: '',
@@ -62,12 +63,13 @@ export default function SettingsScreen() {
     if (!user) return;
 
     const loadProfile = async () => {
+      setLoading(true);
       const cachedProfile = await loadCachedProfile(user.id);
       const { data, error } = await supabase
-        .from('profiles')
-        .select('email, full_name, phone, default_hourly_rate, advance_day, salary_day, any_availability_bonus_amount')
-        .eq('id', user.id)
-        .single();
+          .from('profiles')
+          .select('email, full_name, phone, default_hourly_rate, advance_day, salary_day, any_availability_bonus_amount')
+          .eq('id', user.id)
+          .single();
 
       if (error) {
         setForm({
@@ -99,6 +101,7 @@ export default function SettingsScreen() {
       setBonusSettings(loadedBonusSettings);
       setTaxSettings(loadedTaxSettings);
       setHapticsEnabled(Haptics.getHapticsEnabled());
+      setLoading(false);
     };
 
     loadProfile();
@@ -118,6 +121,7 @@ export default function SettingsScreen() {
     }
 
     setSaving(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const profileData = {
         email: normalizedEmail,
@@ -162,16 +166,19 @@ export default function SettingsScreen() {
       }
 
       if (isOffline) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
             'Сохранено локально',
             'Нет подключения к сети. Настройки сохранены на устройстве.',
             [{ text: 'OK', onPress: () => router.back() }]
         );
       } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert('Успешно', 'Настройки сохранены', [{ text: 'OK', onPress: () => router.back() }]);
       }
 
     } catch (error: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Ошибка', error.message || 'Не удалось сохранить настройки');
     } finally {
       setSaving(false);
@@ -197,194 +204,344 @@ export default function SettingsScreen() {
     }));
   };
 
+  if (loading) {
+    return (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Настройки профиля</Text>
-
-      <Text style={styles.label}>Имя</Text>
-      <TextInput
-        style={styles.input}
-        value={form.full_name}
-        onChangeText={(value) => setForm((prev) => ({ ...prev, full_name: value }))}
-        placeholder="Введите имя"
-      />
-
-      <Text style={styles.label}>Email</Text>
-      <TextInput
-        style={styles.input}
-        value={form.email}
-        onChangeText={(value) => setForm((prev) => ({ ...prev, email: value }))}
-        placeholder="example@mail.ru"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-
-      <Text style={styles.label}>Ставка по умолчанию (₽/ч)</Text>
-      <TextInput
-        style={styles.input}
-        value={form.default_hourly_rate}
-        onChangeText={(value) => setForm((prev) => ({ ...prev, default_hourly_rate: value }))}
-        placeholder="500"
-        keyboardType="numeric"
-      />
-
-      <View style={styles.bonusCard}>
-        <View style={[styles.row, styles.firstRow]}>
-          <View style={styles.rowTextWrap}>
-            <Text style={styles.rowTitle}>Вибрация и отклик</Text>
-            <Text style={styles.rowDescription}>Тактильная отдача при нажатиях и успешных действиях</Text>
-          </View>
-          <Switch
-              value={hapticsEnabled}
-              onValueChange={setHapticsEnabled}
-              thumbColor={hapticsEnabled ? Colors.primary : '#f4f3f4'}
-              trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
-          />
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Настройки</Text>
         </View>
 
-        <View style={[styles.row]}>
-          <View style={styles.rowTextWrap}>
-            <Text style={styles.rowTitle}>Учитывать НДФЛ 13%</Text>
-            <Text style={styles.rowDescription}>Если включено, в доходах показывается сумма после удержания налога</Text>
-          </View>
-          <Switch
-            value={taxSettings.includeNdfl}
-            onValueChange={(value) => setTaxSettings((prev) => ({ ...prev, includeNdfl: value }))}
-            thumbColor={taxSettings.includeNdfl ? Colors.primary : '#f4f3f4'}
-            trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
+        {/* Карточка: Личные данные */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Личные данные</Text>
+
+          <Text style={styles.label}>Имя</Text>
+          <TextInput
+              style={styles.input}
+              value={form.full_name}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, full_name: value }))}
+              placeholder="Введите имя"
+              placeholderTextColor={Colors.gray}
           />
+
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+              style={styles.input}
+              value={form.email}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, email: value }))}
+              placeholder="example@mail.ru"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholderTextColor={Colors.gray}
+          />
+
+          <Text style={styles.label}>Ставка по умолчанию (₽/ч)</Text>
+          <TextInput
+              style={styles.input}
+              value={form.default_hourly_rate}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, default_hourly_rate: value }))}
+              placeholder="500"
+              keyboardType="numeric"
+              placeholderTextColor={Colors.gray}
+          />
+          <Text style={styles.hintText}>Подставляется автоматически при добавлении новой смены.</Text>
         </View>
 
-        <Text style={styles.bonusTitle}>Работник «Вкусно и точка»</Text>
+        {/* Карточка: Системные настройки */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Система и расчеты</Text>
 
-        <View style={styles.row}>
-          <View style={styles.rowTextWrap}>
-            <Text style={styles.rowTitle}>Работник «Вкусно и точка»</Text>
-            <Text style={styles.rowDescription}>Включает специальный расчет бонусов и выплат в статистике</Text>
-          </View>
-          <Switch
-            value={bonusSettings.isVkusnoWorker}
-            onValueChange={(value) =>
-              setBonusSettings((prev) => ({
-                ...prev,
-                isVkusnoWorker: value,
-              }))
-            }
-            thumbColor={bonusSettings.isVkusnoWorker ? Colors.primary : '#f4f3f4'}
-            trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
-          />
-        </View>
-
-        {bonusSettings.isVkusnoWorker && (
-          <>
-            <View style={styles.row}>
-              <View style={styles.rowTextWrap}>
-                <Text style={styles.rowTitle}>Премия «Любые временные возможности»</Text>
-                <Text style={styles.rowDescription}>Если включено, к зарплате добавляется сумма из поля ниже без подсчета часов</Text>
-              </View>
-              <Switch
-                value={bonusSettings.anyAvailabilityBonusEnabled}
-                onValueChange={(value) =>
-                  setBonusSettings((prev) => ({
-                    ...prev,
-                    anyAvailabilityBonusEnabled: value,
-                  }))
-                }
-                thumbColor={bonusSettings.anyAvailabilityBonusEnabled ? Colors.primary : '#f4f3f4'}
-                trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
-              />
+          <View style={[styles.row, styles.firstRow]}>
+            <View style={styles.rowTextWrap}>
+              <Text style={styles.rowTitle}>Вибрация и отклик</Text>
+              <Text style={styles.rowDescription}>Тактильная отдача при нажатиях и успешных действиях</Text>
             </View>
+            <Switch
+                value={hapticsEnabled}
+                onValueChange={(val) => {
+                  setHapticsEnabled(val);
+                  if (val) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                thumbColor={hapticsEnabled ? Colors.white : Colors.white}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+            />
+          </View>
 
-            {bonusSettings.anyAvailabilityBonusEnabled && (
-              <>
-                <Text style={styles.label}>Сумма премии (₽)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={form.any_availability_bonus_amount}
-                  onChangeText={(value) => setForm((prev) => ({ ...prev, any_availability_bonus_amount: value }))}
-                  placeholder="12000"
-                  keyboardType="numeric"
-                />
-              </>
-            )}
-
-            <View style={styles.row}>
-              <View style={styles.rowTextWrap}>
-                <Text style={styles.rowTitle}>Бонус к ставке при 120+ часах</Text>
-                <Text style={styles.rowDescription}>Если включено, при 120+ часах добавляется +100 ₽/ч</Text>
-              </View>
-              <Switch
-                value={bonusSettings.hourlyRateBonusEnabled}
-                onValueChange={(value) =>
-                  setBonusSettings((prev) => ({
-                    ...prev,
-                    hourlyRateBonusEnabled: value,
-                  }))
-                }
-                thumbColor={bonusSettings.hourlyRateBonusEnabled ? Colors.primary : '#f4f3f4'}
-                trackColor={{ false: '#d1d5db', true: Colors.lightPrimary }}
-              />
+          <View style={styles.row}>
+            <View style={styles.rowTextWrap}>
+              <Text style={styles.rowTitle}>Учитывать НДФЛ 13%</Text>
+              <Text style={styles.rowDescription}>Если включено, во всем приложении доход будет показываться уже за вычетом налога</Text>
             </View>
+            <Switch
+                value={taxSettings.includeNdfl}
+                onValueChange={(value) => {
+                  setTaxSettings((prev) => ({ ...prev, includeNdfl: value }));
+                  if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                thumbColor={taxSettings.includeNdfl ? Colors.white : Colors.white}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+            />
+          </View>
+        </View>
 
-            <Text style={styles.label}>Дата аванса</Text>
-            <TouchableOpacity style={styles.dayPickerButton} onPress={() => setShowAdvancePicker(true)}>
-              <Text style={styles.dayPickerValue}>{clampDay(form.advance_day, DEFAULT_ADVANCE_DAY)} число месяца</Text>
-              <Text style={styles.dayPickerHint}>Сохраняется в профиле и используется в статистике</Text>
-            </TouchableOpacity>
+        {/* Карточка: Настройки сети Вкусно и Точка */}
+        <View style={styles.card}>
+          <View style={[styles.row, styles.firstRow]}>
+            <View style={styles.rowTextWrap}>
+              <Text style={styles.rowTitle}>Работник «Вкусно — и точка»</Text>
+              <Text style={styles.rowDescription}>Активирует специальный алгоритм премий и выплат в разделе Статистики</Text>
+            </View>
+            <Switch
+                value={bonusSettings.isVkusnoWorker}
+                onValueChange={(value) => {
+                  setBonusSettings((prev) => ({ ...prev, isVkusnoWorker: value }));
+                  if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                thumbColor={bonusSettings.isVkusnoWorker ? Colors.white : Colors.white}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+            />
+          </View>
 
-            <Text style={styles.label}>Дата зарплаты</Text>
-            <TouchableOpacity style={styles.dayPickerButton} onPress={() => setShowSalaryPicker(true)}>
-              <Text style={styles.dayPickerValue}>{clampDay(form.salary_day, DEFAULT_SALARY_DAY)} число месяца</Text>
-              <Text style={styles.dayPickerHint}>Для зарплаты используется следующий месяц</Text>
-            </TouchableOpacity>
+          {bonusSettings.isVkusnoWorker && (
+              <View style={styles.expandedSection}>
+                <View style={styles.row}>
+                  <View style={styles.rowTextWrap}>
+                    <Text style={styles.rowTitle}>Премия за гибкость</Text>
+                    <Text style={styles.rowDescription}>Фиксированная доплата при выборе "любых временных возможностей"</Text>
+                  </View>
+                  <Switch
+                      value={bonusSettings.anyAvailabilityBonusEnabled}
+                      onValueChange={(value) => {
+                        setBonusSettings((prev) => ({ ...prev, anyAvailabilityBonusEnabled: value }));
+                        if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                      thumbColor={bonusSettings.anyAvailabilityBonusEnabled ? Colors.white : Colors.white}
+                      trackColor={{ false: Colors.border, true: Colors.primary }}
+                  />
+                </View>
 
-            {showAdvancePicker && (
-              <DateTimePicker
-                value={pickerDateFromDay(form.advance_day)}
-                mode="date"
-                display="default"
-                onChange={(_event, date) => handleDayChange('advance_day', date)}
-              />
-            )}
+                {bonusSettings.anyAvailabilityBonusEnabled && (
+                    <View style={styles.subInputWrap}>
+                      <Text style={styles.label}>Сумма премии (₽)</Text>
+                      <TextInput
+                          style={styles.input}
+                          value={form.any_availability_bonus_amount}
+                          onChangeText={(value) => setForm((prev) => ({ ...prev, any_availability_bonus_amount: value }))}
+                          placeholder="12000"
+                          keyboardType="numeric"
+                          placeholderTextColor={Colors.gray}
+                      />
+                    </View>
+                )}
 
-            {showSalaryPicker && (
-              <DateTimePicker
-                value={pickerDateFromDay(form.salary_day)}
-                mode="date"
-                display="default"
-                onChange={(_event, date) => handleDayChange('salary_day', date)}
-              />
-            )}
-          </>
-        )}
-      </View>
+                <View style={styles.row}>
+                  <View style={styles.rowTextWrap}>
+                    <Text style={styles.rowTitle}>Надбавка за норму часов</Text>
+                    <Text style={styles.rowDescription}>Если отработано больше 120 часов, добавляет +100 ₽ к каждому часу</Text>
+                  </View>
+                  <Switch
+                      value={bonusSettings.hourlyRateBonusEnabled}
+                      onValueChange={(value) => {
+                        setBonusSettings((prev) => ({ ...prev, hourlyRateBonusEnabled: value }));
+                        if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                      thumbColor={bonusSettings.hourlyRateBonusEnabled ? Colors.white : Colors.white}
+                      trackColor={{ false: Colors.border, true: Colors.primary }}
+                  />
+                </View>
 
-      <TouchableOpacity style={[styles.button, saving && styles.disabled]} onPress={handleSave} disabled={saving}>
-        {saving ? <ActivityIndicator color={Colors.onPrimary} /> : <Text style={styles.buttonText}>Сохранить</Text>}
-      </TouchableOpacity>
-    </ScrollView>
+                <View style={styles.payrollSection}>
+                  <Text style={styles.label}>Число аванса</Text>
+                  <TouchableOpacity style={styles.dayPickerButton} onPress={() => setShowAdvancePicker(true)} activeOpacity={0.7}>
+                    <Text style={styles.dayPickerValue}>{clampDay(form.advance_day, DEFAULT_ADVANCE_DAY)}</Text>
+                  </TouchableOpacity>
+
+                  <Text style={[styles.label, {marginTop: 16}]}>Число зарплаты</Text>
+                  <TouchableOpacity style={styles.dayPickerButton} onPress={() => setShowSalaryPicker(true)} activeOpacity={0.7}>
+                    <Text style={styles.dayPickerValue}>{clampDay(form.salary_day, DEFAULT_SALARY_DAY)}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.hintText}>Даты используются для расчета выплат в статистике.</Text>
+
+                  {showAdvancePicker && (
+                      <DateTimePicker
+                          value={pickerDateFromDay(form.advance_day)}
+                          mode="date"
+                          display="default"
+                          onChange={(_event, date) => handleDayChange('advance_day', date)}
+                      />
+                  )}
+
+                  {showSalaryPicker && (
+                      <DateTimePicker
+                          value={pickerDateFromDay(form.salary_day)}
+                          mode="date"
+                          display="default"
+                          onChange={(_event, date) => handleDayChange('salary_day', date)}
+                      />
+                  )}
+                </View>
+              </View>
+          )}
+        </View>
+
+        <TouchableOpacity style={[styles.saveButton, saving && styles.saveButtonDisabled]} onPress={handleSave} disabled={saving} activeOpacity={0.8}>
+          {saving ? <ActivityIndicator color={Colors.onPrimary} /> : <Text style={styles.saveButtonText}>Сохранить изменения</Text>}
+        </TouchableOpacity>
+      </ScrollView>
   );
 }
 
 const createStyles = () => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: '700', color: Colors.darkGray, marginBottom: 16 },
-  label: { fontSize: 14, color: Colors.gray, marginBottom: 8, marginTop: 10 },
-  input: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, color: Colors.darkGray, backgroundColor: Colors.white },
-  bonusCard: { marginTop: 16, backgroundColor: Colors.white, borderRadius: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border },
-  bonusTitle: { fontSize: 17, fontWeight: '700', color: Colors.darkGray, paddingTop: 12, paddingBottom: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: Colors.border, paddingVertical: 12 },
-  firstRow: { borderTopWidth: 0 },
-  rowTextWrap: { flex: 1, paddingRight: 10 },
-  rowTitle: { fontSize: 15, fontWeight: '600', color: Colors.darkGray },
-  rowDescription: { marginTop: 4, fontSize: 12, color: Colors.gray },
-  bonusMutualHint: { marginTop: 10, marginBottom: 2, fontSize: 12, color: Colors.gray },
-  dayPickerButton: { marginTop: 8, marginBottom: 8, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, backgroundColor: Colors.white, paddingHorizontal: 12, paddingVertical: 12 },
-  dayPickerValue: { fontSize: 16, fontWeight: '600', color: Colors.darkGray },
-  dayPickerHint: { marginTop: 4, fontSize: 12, color: Colors.gray },
-  button: { marginTop: 20, backgroundColor: Colors.primary, padding: 14, borderRadius: 10, alignItems: 'center' },
-  buttonText: { color: Colors.onPrimary, fontSize: 16, fontWeight: '600' },
-  disabled: { opacity: 0.7 },
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background
+  },
+  content: {
+    paddingBottom: 40
+  },
+  loaderContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.darkGray,
+  },
+  card: {
+    backgroundColor: Colors.white,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.darkGray,
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.darkGray,
+    marginBottom: 8,
+    marginTop: 12
+  },
+  input: {
+    backgroundColor: Colors.lightGray,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: Colors.darkGray,
+    fontWeight: '500',
+  },
+  hintText: {
+    marginTop: 6,
+    fontSize: 13,
+    color: Colors.gray,
+    marginLeft: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingVertical: 16
+  },
+  firstRow: {
+    borderTopWidth: 0,
+    paddingTop: 0,
+  },
+  rowTextWrap: {
+    flex: 1,
+    paddingRight: 16
+  },
+  rowTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.darkGray
+  },
+  rowDescription: {
+    marginTop: 4,
+    fontSize: 13,
+    color: Colors.gray,
+    lineHeight: 18,
+  },
+  expandedSection: {
+    marginTop: 8,
+  },
+  subInputWrap: {
+    marginBottom: 16,
+    paddingHorizontal: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.primary,
+  },
+  payrollSection: {
+    marginTop: 8,
+    backgroundColor: Colors.lightGray,
+    padding: 16,
+    borderRadius: 16,
+  },
+  dayPickerButton: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    alignItems: 'center'
+  },
+  dayPickerValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.darkGray
+  },
+  saveButton: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    backgroundColor: Colors.primary,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveButtonDisabled: {
+    backgroundColor: Colors.gray,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  saveButtonText: {
+    color: Colors.onPrimary,
+    fontSize: 16,
+    fontWeight: '700'
+  },
 });

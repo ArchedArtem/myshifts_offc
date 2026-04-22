@@ -7,6 +7,7 @@ import {
     ScrollView,
     Alert,
     Platform,
+    StyleSheet,
 } from 'react-native';
 import * as Haptics from '@/utils/haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -23,6 +24,7 @@ import { loadHolidayDateSet } from '@/services/holidays';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import { defaultTaxSettings, loadTaxSettings } from '@/services/taxSettings';
 import { deleteShiftOfflineAware, getShiftByIdOffline, saveShiftOfflineAware } from '@/services/offlineShifts';
+import { useTheme } from '@/hooks/useTheme';
 
 type ShiftEntity = {
     id: string;
@@ -50,6 +52,9 @@ const formatTimeInput = (value: string) => {
 };
 
 export default function ShiftEditScreen() {
+    useTheme();
+    const styles = createStyles();
+
     const params = useLocalSearchParams();
     const shiftId = getSingleParam(params.shiftId as string | string[] | undefined);
     const dateParam = getSingleParam(params.date as string | string[] | undefined);
@@ -191,9 +196,7 @@ export default function ShiftEditScreen() {
     }, [formData.breakMinutes, formData.endTime, formData.extraPayment, formData.hourlyRate, formData.startTime]);
 
     const isHolidayShift = holidayDateSet.has(formData.date);
-    const holidayPremium = isHolidayShift
-        ? grossEarnings
-        : 0;
+    const holidayPremium = isHolidayShift ? grossEarnings : 0;
     const totalWithHoliday = applyNdfl(grossEarnings + holidayPremium, includeNdfl);
 
     const handleSave = async () => {
@@ -208,6 +211,7 @@ export default function ShiftEditScreen() {
         }
 
         setLoading(true);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         try {
             if (!user) throw new Error('Пользователь не найден');
 
@@ -266,6 +270,7 @@ export default function ShiftEditScreen() {
                     text: 'Удалить',
                     style: 'destructive',
                     onPress: async () => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                         try {
                             const result = await deleteShiftOfflineAware({ userId: user.id, shiftId });
                             if (result.queued) {
@@ -286,33 +291,30 @@ export default function ShiftEditScreen() {
         if (Platform.OS === 'android') {
             setShowDatePicker(false);
         }
-
         if (selectedDate) {
             setFormData((prev) => ({ ...prev, date: format(selectedDate, 'yyyy-MM-dd') }));
         }
     };
 
-
-
     if (screenLoading) {
         return (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background }}>
-                <Text style={{ color: Colors.gray }}>Загрузка...</Text>
+            <View style={styles.loaderContainer}>
+                <Text style={styles.loaderText}>Загрузка данных...</Text>
             </View>
         );
     }
 
     return (
-        <ScrollView style={{ flex: 1, backgroundColor: Colors.background }}>
-            <View style={{ padding: 20 }}>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray, marginBottom: 8, marginTop: 16 }}>
-                    Дата*
-                </Text>
-                <TouchableOpacity
-                    style={{ padding: 12, backgroundColor: Colors.white, borderRadius: 8, borderWidth: 1, borderColor: Colors.border }}
-                    onPress={() => setShowDatePicker(true)}
-                >
-                    <Text style={{ fontSize: 16, color: Colors.darkGray }}>
+        <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
+            <View style={styles.header}>
+                <Text style={styles.headerTitle}>{isEdit ? 'Редактировать смену' : 'Новая смена'}</Text>
+            </View>
+
+            {/* Карточка: Дата и Шаблоны */}
+            <View style={styles.card}>
+                <Text style={styles.label}>Дата</Text>
+                <TouchableOpacity style={styles.inputWrap} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
+                    <Text style={styles.inputText}>
                         {format(new Date(`${formData.date}T00:00:00`), 'dd.MM.yyyy')}
                     </Text>
                 </TouchableOpacity>
@@ -324,88 +326,66 @@ export default function ShiftEditScreen() {
                     />
                 )}
 
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray, marginBottom: 8, marginTop: 16 }}>
-                    Время начала*
-                </Text>
-                <TextInput
-                    style={{ backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 16, color: Colors.darkGray }}
-                    value={formData.startTime}
-                    onChangeText={(text) => setFormData((prev) => ({ ...prev, startTime: formatTimeInput(text) }))}
-                    keyboardType="number-pad"
-                    placeholder="09:00"
-                    placeholderTextColor={Colors.gray}
-                />
+                {shiftTemplates.length > 0 && (
+                    <>
+                        <Text style={[styles.label, { marginTop: 20 }]}>Быстрые шаблоны</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.templatesScroll}>
+                            {shiftTemplates.map((preset) => (
+                                <TouchableOpacity
+                                    key={preset.id}
+                                    style={styles.templateButton}
+                                    onPress={() => {
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            startTime: preset.startTime,
+                                            endTime: preset.endTime,
+                                            breakMinutes: String(preset.breakMinutes),
+                                        }));
+                                    }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={styles.templateButtonText}>
+                                        {preset.name} {preset.startTime}–{preset.endTime}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </>
+                )}
+            </View>
 
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray, marginBottom: 8, marginTop: 16 }}>
-                    Время окончания*
-                </Text>
-                <TextInput
-                    style={{ backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 16, color: Colors.darkGray }}
-                    value={formData.endTime}
-                    onChangeText={(text) => setFormData((prev) => ({ ...prev, endTime: formatTimeInput(text) }))}
-                    keyboardType="number-pad"
-                    placeholder="17:00"
-                    placeholderTextColor={Colors.gray}
-                />
-                <Text style={{ marginTop: 6, fontSize: 12, color: Colors.gray }}>Формат времени: ЧЧ:ММ (например 09:30).</Text>
+            {/* Карточка: Время */}
+            <View style={styles.card}>
+                <View style={styles.row}>
+                    <View style={styles.halfWidth}>
+                        <Text style={styles.label}>Начало</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={formData.startTime}
+                            onChangeText={(text) => setFormData((prev) => ({ ...prev, startTime: formatTimeInput(text) }))}
+                            keyboardType="number-pad"
+                            placeholder="09:00"
+                            placeholderTextColor={Colors.gray}
+                        />
+                    </View>
+                    <View style={styles.halfWidth}>
+                        <Text style={styles.label}>Окончание</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={formData.endTime}
+                            onChangeText={(text) => setFormData((prev) => ({ ...prev, endTime: formatTimeInput(text) }))}
+                            keyboardType="number-pad"
+                            placeholder="17:00"
+                            placeholderTextColor={Colors.gray}
+                        />
+                    </View>
+                </View>
+                <Text style={styles.hintText}>Формат времени: ЧЧ:ММ (например 09:30)</Text>
 
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray, marginBottom: 8, marginTop: 16 }}>
-                    Шаблоны смен
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
-                    {shiftTemplates.map((preset) => (
-                        <TouchableOpacity
-                            key={preset.id}
-                            style={{
-                                backgroundColor: Colors.white,
-                                borderWidth: 1,
-                                borderColor: Colors.border,
-                                borderRadius: 20,
-                                paddingVertical: 8,
-                                paddingHorizontal: 12,
-                                marginRight: 8,
-                            }}
-                            onPress={() => setFormData((prev) => ({
-                                ...prev,
-                                startTime: preset.startTime,
-                                endTime: preset.endTime,
-                                breakMinutes: String(preset.breakMinutes),
-                            }))}
-                        >
-                            <Text style={{ color: Colors.darkGray, fontSize: 13 }}>{preset.name} {preset.startTime}–{preset.endTime}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray, marginBottom: 8, marginTop: 16 }}>
-                    Ставка в час (₽)*
-                </Text>
+                <Text style={[styles.label, { marginTop: 20 }]}>Перерыв (минуты)</Text>
                 <TextInput
-                    style={{ backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 16, color: Colors.darkGray }}
-                    value={formData.hourlyRate}
-                    onChangeText={(text) => setFormData((prev) => ({ ...prev, hourlyRate: text }))}
-                    keyboardType="numeric"
-                    placeholder="500"
-                    placeholderTextColor={Colors.gray}
-                />
-
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray, marginBottom: 8, marginTop: 16 }}>
-                    Дополнительные выплаты (₽)
-                </Text>
-                <TextInput
-                    style={{ backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 16, color: Colors.darkGray }}
-                    value={formData.extraPayment}
-                    onChangeText={(text) => setFormData((prev) => ({ ...prev, extraPayment: text }))}
-                    keyboardType="numeric"
-                    placeholder="0"
-                    placeholderTextColor={Colors.gray}
-                />
-
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray, marginBottom: 8, marginTop: 16 }}>
-                    Перерыв (минуты)
-                </Text>
-                <TextInput
-                    style={{ backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 16, color: Colors.darkGray }}
+                    style={styles.input}
                     value={formData.breakMinutes}
                     onChangeText={(text) => {
                         const digitsOnly = text.replace(/[^0-9]/g, '');
@@ -413,7 +393,6 @@ export default function ShiftEditScreen() {
                             setFormData((prev) => ({ ...prev, breakMinutes: '0' }));
                             return;
                         }
-
                         const parsed = Math.min(120, Math.max(0, parseInt(digitsOnly, 10)));
                         setFormData((prev) => ({ ...prev, breakMinutes: String(parsed) }));
                     }}
@@ -421,69 +400,268 @@ export default function ShiftEditScreen() {
                     placeholder="0"
                     placeholderTextColor={Colors.gray}
                 />
-                <Text style={{ marginTop: 6, fontSize: 12, color: Colors.gray }}>Максимум 120 минут (2 часа). Перерыв не оплачивается.</Text>
+                <Text style={styles.hintText}>Максимум 120 минут. Перерыв вычитается из часов.</Text>
+            </View>
 
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkGray, marginBottom: 8, marginTop: 16 }}>
-                    Примечания
-                </Text>
+            {/* Карточка: Деньги и Заметки */}
+            <View style={styles.card}>
+                <Text style={styles.label}>Ставка в час (₽)</Text>
                 <TextInput
-                    style={{ backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 16, minHeight: 80, textAlignVertical: 'top', color: Colors.darkGray }}
+                    style={styles.input}
+                    value={formData.hourlyRate}
+                    onChangeText={(text) => setFormData((prev) => ({ ...prev, hourlyRate: text }))}
+                    keyboardType="numeric"
+                    placeholder="500"
+                    placeholderTextColor={Colors.gray}
+                />
+
+                <Text style={[styles.label, { marginTop: 20 }]}>Доплата за смену (₽)</Text>
+                <TextInput
+                    style={styles.input}
+                    value={formData.extraPayment}
+                    onChangeText={(text) => setFormData((prev) => ({ ...prev, extraPayment: text }))}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={Colors.gray}
+                />
+
+                <Text style={[styles.label, { marginTop: 20 }]}>Примечания</Text>
+                <TextInput
+                    style={[styles.input, styles.textArea]}
                     value={formData.notes}
                     onChangeText={(text) => setFormData((prev) => ({ ...prev, notes: text }))}
-                    placeholder="Дополнительная информация"
+                    placeholder="Дополнительная информация (по желанию)"
                     placeholderTextColor={Colors.gray}
                     multiline
                     numberOfLines={3}
                 />
+            </View>
 
-                <View
-                    style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        backgroundColor: Colors.lightPrimary,
-                        padding: 16,
-                        borderRadius: 8,
-                        marginTop: 24,
-                        marginBottom: 20,
-                    }}
-                >
-                    <Text style={{ fontSize: 16, color: Colors.darkGray, fontWeight: '600' }}>Заработок:</Text>
-                    <Text style={{ fontSize: 20, color: Colors.primary, fontWeight: 'bold' }}>
-                        {applyNdfl(grossEarnings, includeNdfl).toFixed(2)} ₽
+            <View style={styles.totalCard}>
+                <Text style={styles.totalLabel}>Итого за смену</Text>
+                <Text style={styles.totalValue}>
+                    {applyNdfl(grossEarnings, includeNdfl).toFixed(2)} ₽
+                </Text>
+            </View>
+
+            {isHolidayShift && (
+                <View style={styles.holidayAlert}>
+                    <Text style={styles.holidayAlertTitle}>🎉 Праздничный день: двойная ставка</Text>
+                    <Text style={styles.holidayAlertText}>
+                        Доплата: +{holidayPremium.toFixed(2)} ₽
+                    </Text>
+                    <Text style={styles.holidayAlertTotal}>
+                        Итого с учетом праздника: {totalWithHoliday.toFixed(2)} ₽
                     </Text>
                 </View>
+            )}
 
-                {isHolidayShift && (
-                    <View style={{ backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 14, marginBottom: 16 }}>
-                        <Text style={{ color: Colors.darkGray, fontSize: 14, fontWeight: '600' }}>🎉 Праздничный день: действует двойная ставка</Text>
-                        <Text style={{ color: Colors.gray, fontSize: 13, marginTop: 6 }}>
-                            Доплата за двойную ставку: +{holidayPremium.toFixed(2)} ₽
-                        </Text>
-                        <Text style={{ color: Colors.primary, fontSize: 15, fontWeight: '700', marginTop: 6 }}>Итого с двойной ставкой: {totalWithHoliday.toFixed(2)} ₽</Text>
-                    </View>
-                )}
-
+            {/* Кнопки */}
+            <View style={styles.actionsContainer}>
                 <TouchableOpacity
-                    style={{ backgroundColor: loading ? Colors.gray : Colors.primary, padding: 16, borderRadius: 8, alignItems: 'center' }}
+                    style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
                     onPress={handleSave}
                     disabled={loading}
+                    activeOpacity={0.8}
                 >
-                    <Text style={{ color: Colors.onPrimary, fontSize: 16, fontWeight: '600' }}>
-                        {loading ? 'Сохранение...' : isEdit ? 'Обновить' : 'Сохранить'}
+                    <Text style={styles.primaryButtonText}>
+                        {loading ? 'Сохранение...' : isEdit ? 'Обновить смену' : 'Добавить смену'}
                     </Text>
                 </TouchableOpacity>
 
                 {isEdit && (
                     <TouchableOpacity
-                        style={{ padding: 16, alignItems: 'center', marginTop: 12 }}
+                        style={styles.deleteButton}
                         onPress={handleDelete}
                         disabled={loading}
+                        activeOpacity={0.8}
                     >
-                        <Text style={{ color: Colors.error, fontSize: 16 }}>Удалить смену</Text>
+                        <Text style={styles.deleteButtonText}>Удалить смену</Text>
                     </TouchableOpacity>
                 )}
             </View>
         </ScrollView>
     );
 }
+
+const createStyles = () => StyleSheet.create({
+    screen: {
+        flex: 1,
+        backgroundColor: Colors.background,
+    },
+    scrollContent: {
+        paddingBottom: 40,
+    },
+    loaderContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.background,
+    },
+    loaderText: {
+        color: Colors.gray,
+        fontSize: 16,
+        fontWeight: '500',
+    },
+    header: {
+        paddingTop: Platform.OS === 'ios' ? 60 : 40,
+        paddingBottom: 16,
+        paddingHorizontal: 20,
+    },
+    headerTitle: {
+        fontSize: 28,
+        fontWeight: '800',
+        color: Colors.darkGray,
+    },
+    card: {
+        backgroundColor: Colors.white,
+        marginHorizontal: 16,
+        marginBottom: 16,
+        borderRadius: 20,
+        padding: 20,
+        shadowColor: Colors.black,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 3,
+    },
+    label: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: Colors.darkGray,
+        marginBottom: 8,
+    },
+    inputWrap: {
+        backgroundColor: Colors.lightGray,
+        borderRadius: 12,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    inputText: {
+        fontSize: 16,
+        color: Colors.darkGray,
+        fontWeight: '500',
+    },
+    input: {
+        backgroundColor: Colors.lightGray,
+        borderRadius: 12,
+        padding: 16,
+        fontSize: 16,
+        color: Colors.darkGray,
+        fontWeight: '500',
+    },
+    textArea: {
+        minHeight: 100,
+        textAlignVertical: 'top',
+    },
+    hintText: {
+        marginTop: 6,
+        fontSize: 13,
+        color: Colors.gray,
+        marginLeft: 4,
+    },
+    row: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    halfWidth: {
+        flex: 1,
+    },
+    templatesScroll: {
+        paddingBottom: 4,
+        gap: 8,
+    },
+    templateButton: {
+        backgroundColor: Colors.lightPrimary,
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+    },
+    templateButtonText: {
+        color: Colors.primary,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    totalCard: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: Colors.lightPrimary,
+        marginHorizontal: 16,
+        padding: 20,
+        borderRadius: 16,
+        marginBottom: 16,
+    },
+    totalLabel: {
+        fontSize: 16,
+        color: Colors.primary,
+        fontWeight: '700',
+    },
+    totalValue: {
+        fontSize: 24,
+        color: Colors.primary,
+        fontWeight: '800',
+    },
+    holidayAlert: {
+        backgroundColor: Colors.white,
+        borderColor: Colors.border,
+        borderWidth: 1,
+        marginHorizontal: 16,
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 20,
+    },
+    holidayAlertTitle: {
+        color: Colors.darkGray,
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 6,
+    },
+    holidayAlertText: {
+        color: Colors.gray,
+        fontSize: 14,
+        marginBottom: 6,
+    },
+    holidayAlertTotal: {
+        color: Colors.primary,
+        fontSize: 16,
+        fontWeight: '800',
+    },
+    actionsContainer: {
+        paddingHorizontal: 16,
+        marginTop: 10,
+        gap: 12,
+    },
+    primaryButton: {
+        backgroundColor: Colors.primary,
+        paddingVertical: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    primaryButtonDisabled: {
+        backgroundColor: Colors.gray,
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    primaryButtonText: {
+        color: Colors.onPrimary,
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    deleteButton: {
+        paddingVertical: 16,
+        alignItems: 'center',
+    },
+    deleteButtonText: {
+        color: Colors.error,
+        fontSize: 15,
+        fontWeight: '600',
+    },
+});
