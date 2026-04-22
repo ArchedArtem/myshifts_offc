@@ -1,24 +1,57 @@
 // Файл: components/SmartScannerButton.tsx
-import React, { useState } from 'react';
-import { TouchableOpacity, Text, StyleSheet, View, Modal, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import React, {useState} from 'react';
+import {TouchableOpacity, Text, StyleSheet, View, Modal, ScrollView, Alert, ActivityIndicator} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { Camera, Check, X, Sparkles, Clock, AlertTriangle } from 'lucide-react-native';
+import {Camera, Check, X, Sparkles, Clock, AlertTriangle, Image as ImageIcon} from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/Colors';
-import { scanScheduleImage } from '@/services/aiScanner';
-import { useShifts } from '@/hooks/useShifts';
-import { useAuth } from '@/hooks/useAuth';
-import { loadCachedProfile } from '@/services/profileCache';
+import {scanScheduleImage} from '@/services/aiScanner';
+import {useShifts} from '@/hooks/useShifts';
+import {useAuth} from '@/hooks/useAuth';
+import {loadCachedProfile} from '@/services/profileCache';
 
 export default function SmartScannerButton() {
     const [isScanning, setIsScanning] = useState(false);
-    const [scanError, setScanError] = useState<string | null>(null); // Стейт для ошибки в кнопке
+    const [scanError, setScanError] = useState<string | null>(null);
     const [detectedShifts, setDetectedShifts] = useState<any[] | null>(null);
-    const { user } = useAuth();
-    const { addShift } = useShifts();
+    const [showIntro, setShowIntro] = useState(false); // Стейт для инструкции
+    const {user} = useAuth();
+    const {addShift} = useShifts();
+
+    const handleScannerPress = async () => {
+        try {
+            const hasSeenIntro = await AsyncStorage.getItem('@ai_scanner_intro_seen');
+
+            if (hasSeenIntro === 'true') {
+                handlePickImage();
+            } else {
+                try {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                } catch (e) {
+                }
+                setShowIntro(true);
+            }
+        } catch (error) {
+            handlePickImage();
+        }
+    };
+
+    const handleStartAfterIntro = async () => {
+        try {
+            await AsyncStorage.setItem('@ai_scanner_intro_seen', 'true');
+            setShowIntro(false);
+            setTimeout(() => {
+                handlePickImage();
+            }, 300);
+        } catch (error) {
+            setShowIntro(false);
+            handlePickImage();
+        }
+    };
 
     const handlePickImage = async () => {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        const {status} = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') return;
 
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -28,7 +61,10 @@ export default function SmartScannerButton() {
         });
 
         if (!result.canceled && result.assets?.[0]?.uri) {
-            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch(e) {}
+            try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            } catch (e) {
+            }
             processImage(result.assets[0].uri);
         }
     };
@@ -39,17 +75,23 @@ export default function SmartScannerButton() {
         try {
             const shifts = await scanScheduleImage(uri);
             setDetectedShifts(shifts);
-            try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+            try {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (e) {
+            }
         } catch (error: any) {
-            try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch(e) {}
-
+            try {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            } catch (e) {
+            }
 
             const msg = (error?.message || '').toLowerCase();
-
             const isOverloaded =
                 msg.includes('demand') ||
                 msg.includes('overloaded') ||
                 msg.includes('temporary') ||
+                msg.includes('quota') ||
+                msg.includes('limit') ||
                 msg.includes('перегружены') ||
                 msg.includes('429') ||
                 msg.includes('503');
@@ -63,7 +105,6 @@ export default function SmartScannerButton() {
             setTimeout(() => {
                 setScanError(null);
             }, 4000);
-
         } finally {
             setIsScanning(false);
         }
@@ -90,7 +131,10 @@ export default function SmartScannerButton() {
             }
 
             setDetectedShifts(null);
-            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch(e) {}
+            try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            } catch (e) {
+            }
         } catch (error) {
             Alert.alert('Ошибка', 'Не удалось сохранить смены');
         }
@@ -99,38 +143,70 @@ export default function SmartScannerButton() {
     return (
         <View>
             <TouchableOpacity
-                style={[
-                    styles.button,
-                    isScanning && styles.buttonScanning,
-                    scanError && styles.buttonError
-                ]}
-                onPress={handlePickImage}
+                style={[styles.button, isScanning && styles.buttonScanning, scanError && styles.buttonError]}
+                onPress={handleScannerPress}
                 disabled={isScanning || !!scanError}
                 activeOpacity={0.8}
             >
                 {isScanning ? (
                     <>
-                        <ActivityIndicator size="small" color={Colors.onPrimary} />
+                        <ActivityIndicator size="small" color={Colors.onPrimary}/>
                         <Text style={styles.buttonText}>Читаю график...</Text>
                     </>
                 ) : scanError ? (
                     <>
-                        <AlertTriangle size={20} color={Colors.white} />
+                        <AlertTriangle size={20} color={Colors.white}/>
                         <Text style={styles.buttonText}>{scanError}</Text>
                     </>
                 ) : (
                     <>
-                        <Sparkles size={20} color={Colors.onPrimary} />
+                        <Sparkles size={20} color={Colors.onPrimary}/>
                         <Text style={styles.buttonText}>AI Сканер</Text>
                     </>
                 )}
             </TouchableOpacity>
 
+            <Modal visible={showIntro} animationType="fade" transparent={true}>
+                <View style={styles.modalOverlayIntro}>
+                    <View style={styles.modalContentIntro}>
+                        <View style={styles.introHeader}>
+                            <Sparkles size={32} color={Colors.primary}/>
+                            <Text style={styles.introTitle}>Как работает AI-сканер?</Text>
+                            <Text style={styles.introSubtitle}>
+                                Забудьте про ручной ввод. Нейросеть сделает всё за вас за пару секунд.
+                            </Text>
+                        </View>
+
+                        <View style={styles.introSteps}>
+                            <View style={styles.stepItem}>
+                                <View style={styles.stepIconBg}><Camera size={20} color={Colors.primary}/></View>
+                                <Text style={styles.stepText}>Сфотографируйте свой график или загрузите скриншот</Text>
+                            </View>
+                            <View style={styles.stepItem}>
+                                <View style={styles.stepIconBg}><Sparkles size={20} color={Colors.primary}/></View>
+                                <Text style={styles.stepText}>Умный ИИ сам найдет даты, время работы и посчитает
+                                    перерывы</Text>
+                            </View>
+                            <View style={styles.stepItem}>
+                                <View style={styles.stepIconBg}><Check size={20} color={Colors.primary}/></View>
+                                <Text style={styles.stepText}>Проверьте результат и сохраните все смены в один
+                                    клик</Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity style={styles.introButton} onPress={handleStartAfterIntro}
+                                          activeOpacity={0.8}>
+                            <Text style={styles.introButtonText}>Понятно, поехали!</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
             <Modal visible={!!detectedShifts} animationType="slide" transparent={true}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Sparkles size={24} color={Colors.primary} />
+                            <Sparkles size={24} color={Colors.primary}/>
                             <Text style={styles.modalTitle}>Нашел новые смены!</Text>
                         </View>
 
@@ -143,7 +219,7 @@ export default function SmartScannerButton() {
                                     </View>
 
                                     <View style={styles.shiftTimeRow}>
-                                        <Clock size={14} color={Colors.gray} />
+                                        <Clock size={14} color={Colors.gray}/>
                                         <Text style={styles.shiftTime}>
                                             {shift.startTime} — {shift.endTime}
                                         </Text>
@@ -158,13 +234,14 @@ export default function SmartScannerButton() {
                         </ScrollView>
 
                         <View style={styles.modalActions}>
-                            <TouchableOpacity style={[styles.actionBtn, styles.cancelBtn]} onPress={() => setDetectedShifts(null)}>
-                                <X size={20} color={Colors.error} />
+                            <TouchableOpacity style={[styles.actionBtn, styles.cancelBtn]}
+                                              onPress={() => setDetectedShifts(null)}>
+                                <X size={20} color={Colors.error}/>
                                 <Text style={styles.cancelText}>Отмена</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={[styles.actionBtn, styles.confirmBtn]} onPress={handleConfirm}>
-                                <Check size={20} color={Colors.onPrimary} />
+                                <Check size={20} color={Colors.onPrimary}/>
                                 <Text style={styles.confirmText}>Добавить все</Text>
                             </TouchableOpacity>
                         </View>
@@ -186,27 +263,16 @@ const styles = StyleSheet.create({
         borderRadius: 30,
         elevation: 8,
         shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: {width: 0, height: 4},
         shadowOpacity: 0.3,
         shadowRadius: 8,
         gap: 8,
     },
-    buttonScanning: {
-        backgroundColor: Colors.secondary,
-    },
-    buttonError: {
-        backgroundColor: Colors.error,
-        shadowColor: Colors.error,
-    },
-    buttonText: {
-        color: Colors.onPrimary,
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    modalOverlay: {
-        flex: 1,
-        justifyContent: 'flex-end',
-    },
+    buttonScanning: {backgroundColor: Colors.secondary},
+    buttonError: {backgroundColor: Colors.error, shadowColor: Colors.error},
+    buttonText: {color: Colors.onPrimary, fontSize: 16, fontWeight: '700'},
+
+    modalOverlay: {flex: 1, justifyContent: 'flex-end'},
     modalContent: {
         backgroundColor: Colors.white,
         borderTopLeftRadius: 32,
@@ -215,21 +281,9 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
         maxHeight: '85%',
     },
-    modalHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 24,
-        gap: 10,
-    },
-    modalTitle: {
-        fontSize: 22,
-        fontWeight: '800',
-        color: Colors.darkGray,
-    },
-    shiftsList: {
-        marginBottom: 24,
-    },
+    modalHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24, gap: 10},
+    modalTitle: {fontSize: 22, fontWeight: '800', color: Colors.darkGray},
+    shiftsList: {marginBottom: 24},
     shiftItem: {
         backgroundColor: Colors.lightGray,
         borderRadius: 16,
@@ -238,17 +292,8 @@ const styles = StyleSheet.create({
         borderLeftWidth: 4,
         borderLeftColor: Colors.primary,
     },
-    shiftDateRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    shiftDate: {
-        fontWeight: '700',
-        fontSize: 16,
-        color: Colors.darkGray,
-    },
+    shiftDateRow: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8},
+    shiftDate: {fontWeight: '700', fontSize: 16, color: Colors.darkGray},
     shiftLabel: {
         color: Colors.primary,
         fontSize: 13,
@@ -259,25 +304,10 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         overflow: 'hidden',
     },
-    shiftTimeRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    shiftTime: {
-        color: Colors.gray,
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    shiftBreak: {
-        color: Colors.gray,
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    modalActions: {
-        flexDirection: 'row',
-        gap: 12,
-    },
+    shiftTimeRow: {flexDirection: 'row', alignItems: 'center', gap: 6},
+    shiftTime: {color: Colors.gray, fontSize: 14, fontWeight: '500'},
+    shiftBreak: {color: Colors.gray, fontSize: 14, fontWeight: '500'},
+    modalActions: {flexDirection: 'row', gap: 12},
     actionBtn: {
         flex: 1,
         flexDirection: 'row',
@@ -285,27 +315,90 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingVertical: 16,
         borderRadius: 16,
-        gap: 8,
+        gap: 8
     },
-    cancelBtn: {
-        backgroundColor: Colors.lightError,
-    },
+    cancelBtn: {backgroundColor: Colors.lightError},
     confirmBtn: {
         backgroundColor: Colors.primary,
         shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: {width: 0, height: 4},
         shadowOpacity: 0.3,
         shadowRadius: 8,
-        elevation: 4,
+        elevation: 4
     },
-    cancelText: {
-        color: Colors.error,
-        fontWeight: '700',
-        fontSize: 16,
+    cancelText: {color: Colors.error, fontWeight: '700', fontSize: 16},
+    confirmText: {color: Colors.onPrimary, fontWeight: '700', fontSize: 16},
+
+    modalOverlayIntro: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        padding: 20,
     },
-    confirmText: {
+    modalContentIntro: {
+        backgroundColor: Colors.white,
+        borderRadius: 28,
+        padding: 24,
+        alignItems: 'center',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: {width: 0, height: 10},
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+    },
+    introHeader: {
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    introTitle: {
+        fontSize: 22,
+        fontWeight: '800',
+        color: Colors.darkGray,
+        marginTop: 12,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    introSubtitle: {
+        fontSize: 14,
+        color: Colors.gray,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    introSteps: {
+        width: '100%',
+        marginBottom: 28,
+        gap: 16,
+    },
+    stepItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.lightGray,
+        padding: 16,
+        borderRadius: 16,
+        gap: 12,
+    },
+    stepIconBg: {
+        backgroundColor: Colors.lightPrimary,
+        padding: 10,
+        borderRadius: 12,
+    },
+    stepText: {
+        flex: 1,
+        fontSize: 14,
+        color: Colors.darkGray,
+        fontWeight: '500',
+        lineHeight: 20,
+    },
+    introButton: {
+        backgroundColor: Colors.primary,
+        width: '100%',
+        paddingVertical: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+    },
+    introButtonText: {
         color: Colors.onPrimary,
-        fontWeight: '700',
         fontSize: 16,
+        fontWeight: '700',
     },
 });
