@@ -103,35 +103,37 @@ export default function SmartScannerButton() {
         try {
             const shifts = await scanScheduleImage(uri);
             if (shifts.length === 0) {
-                setScanError('Смены не найдены 🧐');
-                return;
+                throw new Error('empty_shifts');
             }
             setDetectedShifts(shifts);
             try {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            } catch (e) {
-            }
+            } catch (e) {}
         } catch (error: any) {
             try {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            } catch (e) {
-            }
+            } catch (e) {}
 
             const msg = (error?.message || '').toLowerCase();
-            const isOverloaded =
-                msg.includes('demand') ||
-                msg.includes('overloaded') ||
-                msg.includes('temporary') ||
-                msg.includes('quota') ||
-                msg.includes('limit') ||
-                msg.includes('перегружены') ||
-                msg.includes('429') ||
-                msg.includes('503');
 
-            if (isOverloaded) {
-                setScanError('Сервера перегружены ⏳');
+            if (msg === 'empty_shifts') {
+                setScanError('Смены не найдены 🧐');
             } else {
-                setScanError('Не удалось прочитать ❌');
+                const isOverloaded =
+                    msg.includes('demand') ||
+                    msg.includes('overloaded') ||
+                    msg.includes('temporary') ||
+                    msg.includes('quota') ||
+                    msg.includes('limit') ||
+                    msg.includes('перегружены') ||
+                    msg.includes('429') ||
+                    msg.includes('503');
+
+                if (isOverloaded) {
+                    setScanError('Сервера перегружены ⏳');
+                } else {
+                    setScanError('Не удалось прочитать ❌');
+                }
             }
 
             setTimeout(() => {
