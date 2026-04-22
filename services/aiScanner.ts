@@ -6,7 +6,7 @@ export async function scanScheduleImage(imageUri: string) {
         const response = await fetch(imageUri);
         const blob = await response.blob();
 
-        const base64Image = await new Promise<string>((resolve, reject) => {
+        const imageBase64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => {
                 const res = reader.result as string;
@@ -20,11 +20,21 @@ export async function scanScheduleImage(imageUri: string) {
         });
 
         const { data, error } = await supabase.functions.invoke('parse-shifts', {
-            body: { imageBase64: base64Image },
+            body: { imageBase64 },
         });
 
         if (error) {
-            throw error;
+            let realMessage = error.message;
+
+            try {
+                const errorContext = await error.context?.json();
+                if (errorContext?.error) {
+                    realMessage = errorContext.error;
+                }
+            } catch (e) {
+            }
+
+            throw new Error(realMessage);
         }
 
         return data;

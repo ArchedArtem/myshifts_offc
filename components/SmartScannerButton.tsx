@@ -43,16 +43,26 @@ export default function SmartScannerButton() {
         } catch (error: any) {
             try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch(e) {}
 
-            const errorMessage = error?.message || '';
-            if (errorMessage.includes('demand') || errorMessage.includes('перегружены')) {
+
+            const msg = (error?.message || '').toLowerCase();
+
+            const isOverloaded =
+                msg.includes('demand') ||
+                msg.includes('overloaded') ||
+                msg.includes('temporary') ||
+                msg.includes('перегружены') ||
+                msg.includes('429') ||
+                msg.includes('503');
+
+            if (isOverloaded) {
                 setScanError('Сервера перегружены ⏳');
             } else {
-                setScanError('Не удалось прочитать');
+                setScanError('Не удалось прочитать ❌');
             }
 
             setTimeout(() => {
                 setScanError(null);
-            }, 3500);
+            }, 4000);
 
         } finally {
             setIsScanning(false);
