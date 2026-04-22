@@ -12,7 +12,7 @@ serve(async (req) => {
     const { imageBase64 } = await req.json()
     const apiKey = Deno.env.get('GEMINI_API_KEY')
 
-    const modelName = "gemini-2.5-flash";
+    const modelName = "gemini-2.5-flash-lite";
     const baseUrl = "https://generativelanguage.googleapis.com/v1beta";
 
     const systemInstruction = `
