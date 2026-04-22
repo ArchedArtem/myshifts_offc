@@ -13,130 +13,119 @@ import ModernLoader from '@/components/ModernLoader';
 import * as Haptics from '@/utils/haptics';
 
 export default function AppLayout() {
-  const { session, loading } = useAuth();
-  const { theme } = useTheme();
+    const { session, loading } = useAuth();
+    const { theme } = useTheme();
 
-  useEffect(() => {
-    if (!session?.user?.id) return;
+    useEffect(() => {
+        if (!session?.user?.id) return;
+        showLatestUnreadAnnouncement(session.user.id);
+        const runPushSync = async () => {
+            try {
+                await syncPushTokenForUser(session.user.id);
+            } catch (e) {}
+        };
+        runPushSync();
+    }, [session?.user?.id]);
 
-    showLatestUnreadAnnouncement(session.user.id);
-
-    const runPushSync = async () => {
-      try {
-        const result = await syncPushTokenForUser(session.user.id);
-        if (!result.ok && result.reason) {
-          console.warn('Push token sync skipped:', result.reason);
+    useEffect(() => {
+        if (!session?.user?.id) {
+            stopShiftSyncEngine();
+            return;
         }
-      } catch {
-        // Игнорируем ошибки сети
-      }
-    };
+        const stop = startShiftSyncEngine(session.user.id, {
+            onSynced: async () => {
+                await syncNextShiftWidgetForUser(session.user.id);
+            },
+        });
+        return stop;
+    }, [session?.user?.id]);
 
-    runPushSync();
-  }, [session?.user?.id]);
-
-  useEffect(() => {
-    if (!session?.user?.id) {
-      stopShiftSyncEngine();
-      return;
+    if (loading) {
+        return <ModernLoader fullScreen={true} />;
     }
 
-    const stop = startShiftSyncEngine(session.user.id, {
-      onSynced: async () => {
-        await syncNextShiftWidgetForUser(session.user.id);
-      },
-    });
+    if (!session) {
+        return <Redirect href="/(auth)/login" />;
+    }
 
-    return stop;
-  }, [session?.user?.id]);
+    return (
+        <View style={{ flex: 1, backgroundColor: Colors.background }}>
+            <Tabs
+                key={theme}
+                screenOptions={{
+                    tabBarActiveTintColor: Colors.primary,
+                    tabBarInactiveTintColor: Colors.gray,
+                    tabBarShowLabel: true,
+                    tabBarLabelStyle: styles.tabLabel,
+                    tabBarStyle: {
+                        backgroundColor: Colors.white,
+                        borderTopWidth: 0,
+                        paddingTop: 10,
+                        height: Platform.OS === 'ios' ? 90 : 80,
+                        paddingBottom: Platform.OS === 'ios' ? 30 : 15,
+                        elevation: 25,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: -4 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 10,
+                    },
+                    headerShown: false,
+                }}
+                screenListeners={{
+                    state: () => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    },
+                }}
+            >
+                <Tabs.Screen
+                    name="index"
+                    options={{
+                        title: 'Календарь',
+                        tabBarIcon: ({ color, focused }) => (
+                            <Calendar size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+                        ),
+                    }}
+                />
+                <Tabs.Screen
+                    name="statistics"
+                    options={{
+                        title: 'Статистика',
+                        tabBarIcon: ({ color, focused }) => (
+                            <BarChart3 size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+                        ),
+                    }}
+                />
+                <Tabs.Screen
+                    name="profile"
+                    options={{
+                        title: 'Профиль',
+                        tabBarIcon: ({ color, focused }) => (
+                            <User size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
+                        ),
+                    }}
+                />
 
-  if (loading) {
-    return <ModernLoader fullScreen={true} />;
-  }
-
-  if (!session) {
-    return <Redirect href="/(auth)/login" />;
-  }
-
-  return (
-      <View style={{ flex: 1, backgroundColor: Colors.background }}>
-        <Tabs
-            key={theme}
-            screenOptions={{
-              tabBarActiveTintColor: Colors.primary,
-              tabBarInactiveTintColor: Colors.gray,
-              tabBarShowLabel: true, // Названия включены
-              tabBarLabelStyle: styles.tabLabel,
-              tabBarStyle: styles.tabBar,
-              headerShown: false,
-            }}
-            screenListeners={{
-              state: () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              },
-            }}
-        >
-          <Tabs.Screen
-              name="index"
-              options={{
-                title: 'Календарь',
-                tabBarIcon: ({ color, focused }) => (
-                    <Calendar size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
-                ),
-              }}
-          />
-          <Tabs.Screen
-              name="statistics"
-              options={{
-                title: 'Статистика',
-                tabBarIcon: ({ color, focused }) => (
-                    <BarChart3 size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
-                ),
-              }}
-          />
-          <Tabs.Screen
-              name="profile"
-              options={{
-                title: 'Профиль',
-                tabBarIcon: ({ color, focused }) => (
-                    <User size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
-                ),
-              }}
-          />
-
-          {/* Скрытые экраны */}
-          <Tabs.Screen name="shift-edit" options={{ href: null }} />
-          <Tabs.Screen name="settings" options={{ href: null }} />
-          <Tabs.Screen name="notifications" options={{ href: null }} />
-          <Tabs.Screen name="export-data" options={{ href: null }} />
-          <Tabs.Screen name="shift-templates" options={{ href: null }} />
-          <Tabs.Screen name="holidays" options={{ href: null }} />
-          <Tabs.Screen name="help" options={{ href: null }} />
-          <Tabs.Screen name="widgets" options={{ href: null }} />
-          <Tabs.Screen name="documents" options={{ href: null }} />
-          <Tabs.Screen name="admin-notifications" options={{ href: null }} />
-          <Tabs.Screen name="admin-push" options={{ href: null }} />
-        </Tabs>
-      </View>
-  );
+                {/* Скрытые экраны */}
+                <Tabs.Screen name="shift-edit" options={{ href: null }} />
+                <Tabs.Screen name="settings" options={{ href: null }} />
+                <Tabs.Screen name="notifications" options={{ href: null }} />
+                <Tabs.Screen name="export-data" options={{ href: null }} />
+                <Tabs.Screen name="shift-templates" options={{ href: null }} />
+                <Tabs.Screen name="holidays" options={{ href: null }} />
+                <Tabs.Screen name="help" options={{ href: null }} />
+                <Tabs.Screen name="widgets" options={{ href: null }} />
+                <Tabs.Screen name="documents" options={{ href: null }} />
+                <Tabs.Screen name="admin-notifications" options={{ href: null }} />
+                <Tabs.Screen name="admin-push" options={{ href: null }} />
+            </Tabs>
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: Colors.white,
-    borderTopWidth: 0,
-    height: Platform.OS === 'ios' ? 88 : 78,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 12,
-    paddingTop: 10,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 20,
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 2,
-  },
+    tabLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        marginTop: 2,
+    },
 });
