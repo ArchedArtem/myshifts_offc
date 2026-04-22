@@ -29,6 +29,7 @@ import { deleteShiftOfflineAware, getShiftsWithOffline, getCachedShifts, saveShi
 import { ActivityIndicator } from 'react-native';
 import { useShiftSyncStatus } from '@/hooks/useShiftSyncStatus';
 import { syncNow } from '@/services/offlineSync';
+import SmartScannerButton from '@/components/SmartScannerButton';
 
 import ShiftSkeleton from '@/components/ShiftSkeleton';
 
@@ -568,11 +569,22 @@ export default function CalendarScreen() {
                     </Pressable>
                 </Pressable>
             </Modal>
+
+            <View style={styles.floatingButtonContainer}>
+                <SmartScannerButton />
+            </View>
         </View>
     );
 }
 
 const createStyles = () => StyleSheet.create({
+    floatingButtonContainer: {
+        position: 'absolute',
+        bottom: 24,
+        left: 20,
+        zIndex: 100,
+    },
+
     emptyContainer: {
         alignItems: 'center',
         justifyContent: 'center',

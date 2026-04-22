@@ -15,6 +15,7 @@ interface Shift {
     extra_payment: number;
     earnings: number;
     notes?: string;
+    break?: number;
     created_at: string;
     updated_at: string;
 }
