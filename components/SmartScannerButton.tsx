@@ -1,6 +1,6 @@
 // Файл: components/SmartScannerButton.tsx
 import React, {useState} from 'react';
-import {TouchableOpacity, Text, StyleSheet, View, Modal, ScrollView, Alert, ActivityIndicator} from 'react-native';
+import {TouchableOpacity, Text, StyleSheet, View, Modal, ScrollView, Alert, ActivityIndicator, TextInput} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import {Camera, Check, X, Sparkles, Clock, AlertTriangle, Image as ImageIcon} from 'lucide-react-native';
@@ -36,6 +36,15 @@ export default function SmartScannerButton() {
         } catch (e) {
             return dateString;
         }
+    };
+
+    const updateShiftField = (index: number, field: string, value: string | number) => {
+        setDetectedShifts((prev) => {
+            if (!prev) return prev;
+            const updated = [...prev];
+            updated[index] = { ...updated[index], [field]: value };
+            return updated;
+        });
     };
 
     const handleScannerPress = async () => {
@@ -240,19 +249,48 @@ export default function SmartScannerButton() {
                                         <Text style={styles.shiftDate}>
                                             {formatScanDate(shift.date)}
                                         </Text>
-                                        <Text style={styles.shiftLabel}>{shift.title}</Text>
+                                        {/* Редактируемое название смены */}
+                                        <TextInput
+                                            style={styles.shiftLabelInput}
+                                            value={shift.title}
+                                            onChangeText={(text) => updateShiftField(index, 'title', text)}
+                                            placeholder="Название"
+                                            placeholderTextColor={Colors.gray}
+                                        />
                                     </View>
 
                                     <View style={styles.shiftTimeRow}>
                                         <Clock size={14} color={Colors.gray}/>
-                                        <Text style={styles.shiftTime}>
-                                            {shift.startTime} — {shift.endTime}
-                                        </Text>
-                                        {shift.break > 0 && (
-                                            <Text style={styles.shiftBreak}>
-                                                • ☕ {shift.break} мин
-                                            </Text>
-                                        )}
+                                        {/* Редактируемое время начала */}
+                                        <TextInput
+                                            style={styles.timeInput}
+                                            value={shift.startTime}
+                                            onChangeText={(text) => updateShiftField(index, 'startTime', text)}
+                                            keyboardType="numbers-and-punctuation"
+                                            maxLength={5}
+                                        />
+                                        <Text style={styles.timeSeparator}>—</Text>
+                                        {/* Редактируемое время конца */}
+                                        <TextInput
+                                            style={styles.timeInput}
+                                            value={shift.endTime}
+                                            onChangeText={(text) => updateShiftField(index, 'endTime', text)}
+                                            keyboardType="numbers-and-punctuation"
+                                            maxLength={5}
+                                        />
+
+                                        {/* Редактируемый перерыв */}
+                                        <View style={styles.breakEditRow}>
+                                            <Text style={styles.shiftBreak}>• ☕</Text>
+                                            <TextInput
+                                                style={styles.breakInput}
+                                                value={shift.break?.toString() || '0'}
+                                                onChangeText={(text) => updateShiftField(index, 'break', parseInt(text) || 0)}
+                                                keyboardType="numeric"
+                                                maxLength={3}
+                                            />
+                                            <Text style={styles.shiftBreak}>мин</Text>
+                                        </View>
                                     </View>
                                 </View>
                             ))}
@@ -278,6 +316,51 @@ export default function SmartScannerButton() {
 }
 
 const styles = StyleSheet.create({
+    shiftLabelInput: {
+        color: Colors.primary,
+        fontSize: 13,
+        fontWeight: '600',
+        backgroundColor: Colors.lightPrimary,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        minWidth: 60,  // Чтобы не исчез, если юзер сотрет текст
+        maxWidth: 100, // Чтобы длинное название не выдавило дату за экран
+        textAlign: 'center',
+    },
+    timeInput: {
+        color: Colors.darkGray,
+        fontSize: 15,
+        fontWeight: '600',
+        backgroundColor: Colors.white,
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+        borderRadius: 6,
+        textAlign: 'center',
+        width: 55, // Время "09:00" всегда состоит из 5 символов. Фиксированная ширина тут идеальна.
+    },
+    timeSeparator: {
+        color: Colors.gray,
+        fontSize: 14,
+        fontWeight: '500',
+        marginHorizontal: 2,
+    },
+    breakEditRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    breakInput: {
+        color: Colors.darkGray,
+        fontSize: 14,
+        fontWeight: '600',
+        backgroundColor: Colors.white,
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+        borderRadius: 6,
+        textAlign: 'center',
+        minWidth: 35,
+    },
     button: {
         flexDirection: 'row',
         alignItems: 'center',
