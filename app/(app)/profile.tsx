@@ -15,7 +15,7 @@ import Colors from '@/constants/Colors';
 import { loadCachedProfile, saveCachedProfile } from '@/services/profileCache';
 import { useTheme } from '@/hooks/useTheme';
 
-const ADMIN_EMAIL = 'archedartem@gmail.com'; // поменять здесь при необходимости
+const ADMIN_EMAIL = 'archedartem@gmail.com';
 
 interface ProfileHeader {
     email: string;
@@ -184,9 +184,7 @@ export default function ProfileScreen() {
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} disabled={loading}>
                     <Text style={styles.logoutButtonText}>{loading ? 'Выход...' : 'Выйти из аккаунта'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount} disabled={loading}>
-                    <Text style={styles.deleteButtonText}>{loading ? 'Удаление...' : 'Удалить аккаунт'}</Text>
-                </TouchableOpacity>
+
                 <TouchableOpacity style={styles.supportButton} activeOpacity={0.85}
                                   onPress={() => {
                                       router.push('/support-developer');
@@ -194,6 +192,10 @@ export default function ProfileScreen() {
                     <Text style={styles.supportButtonText}>Поддержать разработчика ❤️</Text>
                 </TouchableOpacity>
             </View>
+
+            <TouchableOpacity style={styles.deleteAccountLink} onPress={handleDeleteAccount} disabled={loading}>
+                <Text style={styles.deleteAccountText}>{loading ? 'Удаление...' : 'Удалить аккаунт'}</Text>
+            </TouchableOpacity>
         </ScrollView>
     );
 }
@@ -284,6 +286,7 @@ const createStyles = () => StyleSheet.create({
         color: Colors.error,
         marginBottom: 20,
     },
+    // ... стили logoutButton оставляем как есть ...
     logoutButton: {
         backgroundColor: Colors.lightGray,
         padding: 16,
@@ -295,34 +298,33 @@ const createStyles = () => StyleSheet.create({
         fontWeight: '500',
         color: Colors.darkGray,
     },
-    deleteButton: {
-        marginTop: 12,
-        backgroundColor: Colors.lightError,
-        borderWidth: 1,
-        borderColor: Colors.error,
-        padding: 16,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    deleteButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: Colors.error,
-    },
     supportButton: {
-        marginTop: 14,
+        marginTop: 16, // Чуть увеличил отступ от кнопки выхода
         borderWidth: 1,
         borderColor: Colors.border,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
+        paddingVertical: 12, // Сделал чуть комфортнее для нажатия
+        paddingHorizontal: 16,
         borderRadius: 999,
         alignSelf: 'center',
         backgroundColor: Colors.white,
     },
     supportButtonText: {
-        fontSize: 13,
+        fontSize: 14,
         color: Colors.primary,
         fontWeight: '600',
+    },
+
+    // Новые стили для удаления аккаунта
+    deleteAccountLink: {
+        alignSelf: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        marginBottom: 30, // Отступ от самого низа экрана
+    },
+    deleteAccountText: {
+        fontSize: 14,
+        color: Colors.gray, // Серый цвет делает её менее "кричащей", но текст понятен
+        fontWeight: '500',
     },
 
 });

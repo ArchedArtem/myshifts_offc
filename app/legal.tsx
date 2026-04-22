@@ -1,10 +1,17 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/services/supabase/client';
 import Colors from '@/constants/Colors';
 import { useTheme } from '@/hooks/useTheme';
 
-const privacySections = [
+type Section = {
+  title: string;
+  items: string[];
+};
+
+const defaultPrivacySections: Section[] = [
   {
     title: '1. Общие положения',
     items: [
@@ -34,13 +41,14 @@ const privacySections = [
     ],
   },
   {
-    title: '4. Условия обработки и ИИ',
+    title: '4. Условия обработки, ИИ и Платежи',
     items: [
       '4.1. Обработка персональных данных осуществляется в электронном виде.',
       '4.2. Персональные данные могут передаваться третьим лицам исключительно в случаях, необходимых для функционирования сервиса.',
-      '4.3. В приложении используется функция «AI-сканер» для распознавания графиков. При использовании этой функции изображение отправляется на серверы провайдеров нейросетей исключительно для извлечения текстовой информации.',
-      '4.4. Исходные изображения не сохраняются на серверах приложения и не используются для обучения моделей.',
+      '4.3. В приложении используется функция «AI-сканер» для распознавания графиков. При использовании этой функции изображение отправляется на серверы сторонних провайдеров нейросетей исключительно для извлечения текстовой информации.',
+      '4.4. Исходные изображения не сохраняются на серверах приложения и не используются для обучения ИИ-моделей.',
       '4.5. Администрация сервиса не получает и не хранит данные банковских карт пользователей.',
+      '4.6. При оказании добровольной поддержки обработка платежей осуществляется на стороне защищенного платежного шлюза (ЮKassa / ООО НКО «ЮМани»).',
     ],
   },
   {
@@ -66,7 +74,7 @@ const privacySections = [
   },
 ];
 
-const termsSections = [
+const defaultTermsSections: Section[] = [
   {
     title: '1. Общие положения',
     items: [
@@ -93,11 +101,13 @@ const termsSections = [
     ],
   },
   {
-    title: '4. Добровольная финансовая поддержка',
+    title: '4. Добровольная финансовая поддержки',
     items: [
       '4.1. Пользователь вправе по собственной инициативе оказать добровольную финансовую поддержку разработчику проекта.',
       '4.2. Добровольная финансовая поддержка не является оплатой услуг, покупкой цифровых товаров или подпиской.',
       '4.3. Оказание добровольной финансовой поддержки не предоставляет пользователю каких-либо дополнительных функций в приложении.',
+      '4.4. Все транзакции проводятся через сторонний платежный сервис (ЮKassa). Разработчик не несёт ответственности за технические ошибки или сбои на стороне платежной системы.',
+      '4.5. Добровольная поддержка осуществляется безвозмездно, возврат переведенных средств не предусмотрен.',
     ],
   },
   {
@@ -116,6 +126,7 @@ const termsSections = [
   },
 ];
 
+
 export default function LegalScreen() {
   useTheme();
   const styles = createStyles();
@@ -123,11 +134,54 @@ export default function LegalScreen() {
   const { doc } = useLocalSearchParams<{ doc?: string }>();
 
   const isTerms = doc === 'terms';
+  const docType = isTerms ? 'terms' : 'privacy';
   const title = isTerms ? 'Пользовательское соглашение' : 'Политика конфиденциальности';
   const intro = isTerms
       ? 'Настоящее Пользовательское соглашение определяет условия использования мобильного приложения «Мои смены».'
       : 'Настоящая Политика конфиденциальности определяет порядок обработки и защиты персональных данных пользователей мобильного приложения и сайта «Мои смены».';
-  const sections = isTerms ? termsSections : privacySections;
+
+  const [sections, setSections] = useState<Section[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDocument = async () => {
+      const cacheKey = `@legal_${docType}`;
+
+      try {
+        const cachedData = await AsyncStorage.getItem(cacheKey);
+        if (cachedData) {
+          setSections(JSON.parse(cachedData));
+          setIsLoading(false);
+        }
+
+        const { data, error } = await supabase
+            .from('legal_docs')
+            .select('sections')
+            .eq('doc_type', docType)
+            .single();
+
+        if (data && data.sections) {
+          const remoteDataString = JSON.stringify(data.sections);
+          if (cachedData !== remoteDataString) {
+            setSections(data.sections);
+            await AsyncStorage.setItem(cacheKey, remoteDataString);
+          }
+        } else if (!cachedData) {
+          setSections(isTerms ? defaultTermsSections : defaultPrivacySections);
+        }
+
+      } catch (error) {
+        console.error('Ошибка загрузки документов:', error);
+        if (sections.length === 0) {
+          setSections(isTerms ? defaultTermsSections : defaultPrivacySections);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDocument();
+  }, [docType]);
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -142,20 +196,26 @@ export default function LegalScreen() {
         <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.85}>
           <Text style={styles.backButtonText}>← Назад</Text>
         </TouchableOpacity>
+
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.intro}>{intro}</Text>
 
-        {sections.map((section) => (
-            <View key={section.title} style={styles.section}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              {section.items.map((item, idx) => (
-                  <Text key={idx} style={styles.paragraph}>{item}</Text>
-              ))}
-            </View>
-        ))}
+        {isLoading && sections.length === 0 ? (
+            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+        ) : (
+            sections.map((section) => (
+                <View key={section.title} style={styles.section}>
+                  <Text style={styles.sectionTitle}>{section.title}</Text>
+                  {section.items.map((item, idx) => (
+                      <Text key={idx} style={styles.paragraph}>{item}</Text>
+                  ))}
+                </View>
+            ))
+        )}
       </ScrollView>
   );
 }
+
 
 const createStyles = () => StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },

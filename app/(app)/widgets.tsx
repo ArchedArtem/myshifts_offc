@@ -1,137 +1,185 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO } from 'date-fns';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
-import { getAllShiftsOfflineAware } from '@/services/offlineShifts';
-import { applyNdfl, calculateDuration, calculateEarnings } from '@/utils/calculations';
 import { useTheme } from '@/hooks/useTheme';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
-import { loadTaxSettings } from '@/services/taxSettings';
-
-type ShiftRow = {
-  date: string;
-  start_time: string;
-  end_time: string;
-  hourly_rate: number;
-  extra_payment: number;
-  break?: number | null;
-};
-
-const normalizeTime = (time: string) => time?.split(':').slice(0, 2).join(':');
+import * as Haptics from '@/utils/haptics';
 
 export default function WidgetsScreen() {
   const { user } = useAuth();
   useTheme();
   const styles = createStyles();
-  const [refreshing, setRefreshing] = useState(false);
-  const [monthEarnings, setMonthEarnings] = useState(0);
-  const [weekHours, setWeekHours] = useState(0);
-  const [nextShift, setNextShift] = useState<string>('Нет ближайшей смены');
+  const [syncing, setSyncing] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const handleForceSync = async () => {
     if (!user) return;
 
-    const now = new Date();
-    const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
-    const monthEnd = format(endOfMonth(now), 'yyyy-MM-dd');
-    const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    setSyncing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const [allShiftsPayload, taxSettings] = await Promise.all([
-      getAllShiftsOfflineAware(user.id),
-      loadTaxSettings(),
-    ]);
-
-    const allShifts = (allShiftsPayload.shifts || []) as ShiftRow[];
-    const monthRows = allShifts.filter((shift) => shift.date >= monthStart && shift.date <= monthEnd);
-    const weekRows = allShifts.filter((shift) => shift.date >= weekStart && shift.date <= weekEnd);
-    const nextData = allShifts
-      .filter((shift) => shift.date >= format(now, 'yyyy-MM-dd'))
-      .sort((a, b) => `${a.date} ${normalizeTime(a.start_time)}`.localeCompare(`${b.date} ${normalizeTime(b.start_time)}`));
-
-    const earnings = monthRows.reduce((sum, shift) => sum + applyNdfl(calculateEarnings(
-      normalizeTime(shift.start_time),
-      normalizeTime(shift.end_time),
-      shift.hourly_rate ?? 0,
-      shift.extra_payment ?? 0,
-      shift.break ?? 0,
-    ), taxSettings.includeNdfl), 0);
-
-    const hours = weekRows.reduce((sum, shift) => sum + calculateDuration(
-      normalizeTime(shift.start_time),
-      normalizeTime(shift.end_time),
-      shift.break ?? 0,
-    ), 0);
-
-    setMonthEarnings(earnings);
-    setWeekHours(hours);
-
-    const nearest = nextData[0] as { date: string; start_time: string } | undefined;
-    if (nearest) {
-      const dt = parseISO(`${nearest.date}T${normalizeTime(nearest.start_time)}:00`);
-      setNextShift(`${format(dt, 'dd.MM')} в ${normalizeTime(nearest.start_time)}`);
-    } else {
-      setNextShift('Нет ближайшей смены');
+    try {
+      await syncNextShiftWidgetForUser(user.id);
+    } catch (error) {
+      console.error('Ошибка синхронизации виджета:', error);
+    } finally {
+      setTimeout(() => setSyncing(false), 1000);
     }
-  }, [user]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  };
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadData(); setRefreshing(false); }} tintColor={Colors.primary} />}
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Виджеты</Text>
-      </View>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.promoHeader}>
+          <Text style={styles.promoIcon}>🧩</Text>
+          <Text style={styles.title}>Виджет на главный экран</Text>
+          <Text style={styles.subtitle}>
+            Узнавайте о ближайшей смене и следите за доходом, даже не открывая приложение!
+          </Text>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>💰 Доход за месяц</Text>
-        <Text style={styles.cardValue}>{monthEarnings.toFixed(2)} ₽</Text>
-      </View>
+        <View style={styles.instructionCard}>
+          <Text style={styles.cardTitle}>Как добавить (Android)</Text>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>⏱ Часы за неделю</Text>
-        <Text style={styles.cardValue}>{weekHours.toFixed(1)} ч</Text>
-      </View>
+          <View style={styles.stepRow}>
+            <View style={styles.stepNumber}><Text style={styles.stepNumberText}>1</Text></View>
+            <Text style={styles.stepText}>Сделайте долгое нажатие на пустом месте рабочего стола вашего телефона.</Text>
+          </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>📅 Ближайшая смена</Text>
-        <Text style={styles.cardValue}>{nextShift}</Text>
-      </View>
+          <View style={styles.stepRow}>
+            <View style={styles.stepNumber}><Text style={styles.stepNumberText}>2</Text></View>
+            <Text style={styles.stepText}>В появившемся меню выберите раздел «Виджеты».</Text>
+          </View>
 
+          <View style={styles.stepRow}>
+            <View style={styles.stepNumber}><Text style={styles.stepNumberText}>3</Text></View>
+            <Text style={styles.stepText}>Найдите «Мои смены», выберите нужный размер и перетащите его на экран.</Text>
+          </View>
+        </View>
 
+        <View style={styles.settingsCard}>
+          <Text style={styles.cardTitle}>Настройки виджета</Text>
+          <Text style={styles.infoText}>
+            Виджет обновляется автоматически в фоновом режиме. Если данные на рабочем столе зависли или не совпадают с приложением, вы можете обновить их вручную.
+          </Text>
 
-      <TouchableOpacity style={styles.refreshButton} onPress={async () => { await loadData(); if (user?.id) { await syncNextShiftWidgetForUser(user.id); } }}>
-        <Text style={styles.refreshText}>Обновить виджет</Text>
-      </TouchableOpacity>
-    </ScrollView>
+          <TouchableOpacity
+              style={[styles.syncButton, syncing && styles.syncButtonActive]}
+              onPress={handleForceSync}
+              disabled={syncing}
+              activeOpacity={0.8}
+          >
+            <Text style={styles.syncButtonText}>
+              {syncing ? 'Обновление...' : 'Принудительно обновить виджет'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+      </ScrollView>
   );
 }
 
 const createStyles = () => StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { padding: 20, backgroundColor: Colors.primary },
-  title: { fontSize: 24, color: Colors.onPrimary, fontWeight: '700' },
-  card: { backgroundColor: Colors.white, marginHorizontal: 16, marginTop: 12, borderRadius: 12, padding: 16 },
-  cardTitle: { color: Colors.gray, marginBottom: 6 },
-  cardValue: { fontSize: 24, fontWeight: '700', color: Colors.primary },
-  infoCard: { backgroundColor: Colors.white, marginHorizontal: 16, marginTop: 12, borderRadius: 12, padding: 16 },
-  infoTitle: { marginTop: 10, color: Colors.darkGray, fontWeight: '700' },
-  infoCode: {
-    marginTop: 6,
-    fontFamily: 'monospace',
-    color: Colors.primary,
-    backgroundColor: Colors.lightPrimary,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background
   },
-  infoText: { color: Colors.darkGray, lineHeight: 20 },
-  refreshButton: { margin: 16, backgroundColor: Colors.primary, borderRadius: 10, alignItems: 'center', padding: 14 },
-  refreshText: { color: Colors.onPrimary, fontWeight: '600' },
+  content: {
+    padding: 16,
+    paddingBottom: 40
+  },
+
+  promoHeader: {
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 24,
+    paddingHorizontal: 10,
+  },
+  promoIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: Colors.darkGray,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: Colors.gray,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+
+  instructionCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  settingsCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.darkGray,
+    marginBottom: 16,
+  },
+
+  stepRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    paddingRight: 10,
+  },
+  stepNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.lightPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    marginTop: 2,
+  },
+  stepNumberText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  stepText: {
+    fontSize: 15,
+    color: Colors.darkGray,
+    lineHeight: 22,
+    flex: 1,
+  },
+
+  infoText: {
+    fontSize: 14,
+    color: Colors.gray,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+
+  syncButton: {
+    backgroundColor: Colors.lightGray,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  syncButtonActive: {
+    backgroundColor: Colors.lightPrimary,
+  },
+  syncButtonText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 15,
+  },
 });
