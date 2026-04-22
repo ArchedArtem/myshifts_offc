@@ -10,10 +10,10 @@ serve(async (req) => {
 
   try {
     const { imageBase64 } = await req.json()
-    const apiKey = Deno.env.get('GEMINI_API_KEY')
+    const apiKey = Deno.env.get('OPENROUTER_API_KEY')
 
-    const modelName = "gemini-2.5-flash-lite";
-    const baseUrl = "https://generativelanguage.googleapis.com/v1beta";
+    const modelName = "google/gemma-4-31b-it:free";
+    const baseUrl = "https://openrouter.ai/api/v1";
 
     const systemInstruction = `
       Ты — эксперт по чтению рабочих графиков (в том числе формата "Вкусно — и точка"). 
@@ -32,31 +32,33 @@ serve(async (req) => {
       3. ПЕРЕРЫВЫ (break): Справа от времени смены могут быть колонки с цифрами перерывов в минутах (например, "15" и "30", или "15", "15", "30", или просто "30"). Тебе нужно найти эти цифры, относящиеся к конкретному дню, математически сложить их (например, 15 + 30 = 45) и записать итоговое число в поле break. Если цифр перерыва нет, верни 0.
     `;
 
-    const contents = [{
-      parts: [
-        { text: systemInstruction },
-        { inline_data: { mime_type: "image/jpeg", data: imageBase64 } }
-      ]
-    }];
-
-    const response = await fetch(`${baseUrl}/models/${modelName}:generateContent?key=${apiKey}`, {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents })
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: modelName,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: systemInstruction },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
+            ]
+          }
+        ]
+      })
     });
 
     const data = await response.json();
 
     if (data.error) {
-      throw new Error(`Google API Error: ${data.error.message}`);
+      throw new Error(`OpenRouter API Error: ${data.error.message}`);
     }
 
-    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      throw new Error('ИИ не нашел данных на изображении');
-    }
-
-    let text = data.candidates[0].content.parts[0].text;
-
+    let text = data.choices[0].message.content;
     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
     return new Response(text, {

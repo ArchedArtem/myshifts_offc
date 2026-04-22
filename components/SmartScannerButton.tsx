@@ -19,6 +19,25 @@ export default function SmartScannerButton() {
     const {user} = useAuth();
     const {addShift} = useShifts();
 
+    const formatScanDate = (dateString: string) => {
+        try {
+            const date = new Date(`${dateString}T12:00:00`);
+
+            if (isNaN(date.getTime())) return dateString;
+
+            let formatted = date.toLocaleDateString('ru-RU', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                weekday: 'short',
+            }).replace(' г.', '');
+
+            return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+        } catch (e) {
+            return dateString;
+        }
+    };
+
     const handleScannerPress = async () => {
         try {
             const hasSeenIntro = await AsyncStorage.getItem('@ai_scanner_intro_seen');
@@ -57,7 +76,7 @@ export default function SmartScannerButton() {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
-            quality: 0.5,
+            quality: 0.4,
         });
 
         if (!result.canceled && result.assets?.[0]?.uri) {
@@ -74,6 +93,10 @@ export default function SmartScannerButton() {
         setScanError(null);
         try {
             const shifts = await scanScheduleImage(uri);
+            if (shifts.length === 0) {
+                setScanError('Смены не найдены 🧐');
+                return;
+            }
             setDetectedShifts(shifts);
             try {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -214,7 +237,9 @@ export default function SmartScannerButton() {
                             {detectedShifts?.map((shift, index) => (
                                 <View key={index} style={styles.shiftItem}>
                                     <View style={styles.shiftDateRow}>
-                                        <Text style={styles.shiftDate}>{shift.date}</Text>
+                                        <Text style={styles.shiftDate}>
+                                            {formatScanDate(shift.date)}
+                                        </Text>
                                         <Text style={styles.shiftLabel}>{shift.title}</Text>
                                     </View>
 
