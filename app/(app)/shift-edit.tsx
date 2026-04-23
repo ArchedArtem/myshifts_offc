@@ -8,7 +8,9 @@ import {
     Alert,
     Platform,
     StyleSheet,
+    ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from '@/utils/haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -163,14 +165,32 @@ export default function ShiftEditScreen() {
             let mounted = true;
 
             const loadTemplates = async () => {
-                const [templates, holidays, taxSettings] = await Promise.all([
-                    getAllShiftTemplates(user?.id),
+                if (!user?.id) return;
+
+                let templates: ShiftTemplate[] = [];
+                try {
+                    templates = await getAllShiftTemplates(user.id);
+                    await AsyncStorage.setItem(`@cached_templates_${user.id}`, JSON.stringify(templates));
+                } catch (error) {
+                    const cachedRaw = await AsyncStorage.getItem(`@cached_templates_${user.id}`);
+                    templates = cachedRaw ? JSON.parse(cachedRaw) : [];
+                }
+
+                const queueRaw = await AsyncStorage.getItem(`@offline_templates_${user.id}`);
+                const queue = queueRaw ? JSON.parse(queueRaw) : [];
+
+                const delQueueRaw = await AsyncStorage.getItem(`@offline_delete_templates_${user.id}`);
+                const delQueue = delQueueRaw ? JSON.parse(delQueueRaw) : [];
+
+                const combinedTemplates = [...templates, ...queue].filter((t: any) => !delQueue.includes(t.id));
+
+                const [holidays, taxSettings] = await Promise.all([
                     loadHolidayDateSet(),
                     loadTaxSettings(),
                 ]);
 
                 if (mounted) {
-                    setShiftTemplates(templates);
+                    setShiftTemplates(combinedTemplates);
                     setHolidayDateSet(holidays);
                     setIncludeNdfl(taxSettings.includeNdfl);
                 }
@@ -299,7 +319,7 @@ export default function ShiftEditScreen() {
     if (screenLoading) {
         return (
             <View style={styles.loaderContainer}>
-                <Text style={styles.loaderText}>Загрузка данных...</Text>
+                <ActivityIndicator size="large" color={Colors.primary} />
             </View>
         );
     }
@@ -497,11 +517,6 @@ const createStyles = () => StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: Colors.background,
-    },
-    loaderText: {
-        color: Colors.gray,
-        fontSize: 16,
-        fontWeight: '500',
     },
     header: {
         paddingTop: Platform.OS === 'ios' ? 60 : 40,

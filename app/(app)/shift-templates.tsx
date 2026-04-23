@@ -10,6 +10,7 @@ import {
   View,
   Platform,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/Colors';
@@ -44,13 +45,15 @@ export default function ShiftTemplatesScreen() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const { user } = useAuth();
   useTheme();
   const styles = createStyles();
 
-  const loadTemplates = useCallback(async () => {
+  const loadTemplates = useCallback(async (isRefresh = false) => {
     if (!user) return;
-    setLoadingInitial(true);
+    if (!isRefresh) setLoadingInitial(true);
+
     try {
       let data = await loadCustomShiftTemplates(user.id);
       await AsyncStorage.setItem(`@cached_templates_${user.id}`, JSON.stringify(data));
@@ -109,12 +112,19 @@ export default function ShiftTemplatesScreen() {
       }
     } finally {
       setLoadingInitial(false);
+      setRefreshing(false);
     }
   }, [user]);
 
   useEffect(() => {
     loadTemplates();
   }, [loadTemplates]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    loadTemplates(true);
+  };
 
   const handleAddTemplate = async () => {
     const name = form.name.trim();
@@ -151,7 +161,6 @@ export default function ShiftTemplatesScreen() {
       if (error.message?.includes('Network request failed') || error.message?.includes('Failed to fetch')) {
         const newTemplate: ShiftTemplate = {
           id: `offline_${Date.now()}`,
-          user_id: user.id,
           name,
           startTime,
           endTime,
@@ -187,7 +196,6 @@ export default function ShiftTemplatesScreen() {
         onPress: async () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           try {
-            // Если удаляем локальный шаблон, который еще не ушел на сервер
             if (templateId.startsWith('offline_')) {
               const queueRaw = await AsyncStorage.getItem(`@offline_templates_${user.id}`);
               let queue = queueRaw ? JSON.parse(queueRaw) : [];
@@ -202,7 +210,6 @@ export default function ShiftTemplatesScreen() {
             setCustomTemplates((prev) => prev.filter((item) => item.id !== templateId));
           } catch (error: any) {
             if (error.message?.includes('Network request failed') || error.message?.includes('Failed to fetch')) {
-              // ОФЛАЙН УДАЛЕНИЕ
               const delQueueRaw = await AsyncStorage.getItem(`@offline_delete_templates_${user.id}`);
               const delQueue = delQueueRaw ? JSON.parse(delQueueRaw) : [];
               delQueue.push(templateId);
@@ -237,6 +244,13 @@ export default function ShiftTemplatesScreen() {
             style={styles.screen}
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={Colors.primary}
+              />
+            }
         >
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Шаблоны смен</Text>
