@@ -1,8 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
 import Colors from '@/constants/Colors';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function ShiftSkeleton() {
+    useTheme();
+    const styles = createStyles(); // Динамическое создание стилей
+
     const opacity = useRef(new Animated.Value(0.3)).current;
 
     useEffect(() => {
@@ -34,14 +38,17 @@ export default function ShiftSkeleton() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
     card: {
         backgroundColor: Colors.white,
-        borderRadius: 14,
+        borderRadius: 16,
         padding: 16,
         marginBottom: 12,
-        borderWidth: 1,
-        borderColor: Colors.border,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 2,
     },
     header: {
         flexDirection: 'row',

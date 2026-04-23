@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/Colors';
 import { applyNdfl, calculateDuration, calculateEarnings, formatDuration } from '@/utils/calculations';
 import * as Haptics from '@/utils/haptics';
+import { useTheme } from '@/hooks/useTheme';
 
 interface ShiftCardProps {
     shift: {
@@ -26,6 +27,9 @@ interface ShiftCardProps {
 }
 
 export default function ShiftCard({ shift, includeNdfl = false, onPress, onEdit, onDelete }: ShiftCardProps) {
+    useTheme();
+    const styles = createStyles(); // Динамическое создание стилей
+
     const swipeableRef = useRef<Swipeable>(null);
 
     const normalizeTime = (time: string) => time.split(':').slice(0, 2).join(':');
@@ -180,20 +184,20 @@ export default function ShiftCard({ shift, includeNdfl = false, onPress, onEdit,
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
     animatedWrapper: {
         marginBottom: 12,
-        borderRadius: 12,
+        borderRadius: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 2,
         backgroundColor: Colors.white,
     },
     card: {
         backgroundColor: Colors.white,
-        borderRadius: 12,
+        borderRadius: 16,
         padding: 16,
     },
     leftAction: {
@@ -201,14 +205,14 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         width: 85,
-        borderRadius: 12,
+        borderRadius: 16,
     },
     rightAction: {
         backgroundColor: Colors.error,
         justifyContent: 'center',
         alignItems: 'center',
         width: 85,
-        borderRadius: 12,
+        borderRadius: 16,
     },
     headerRow: {
         flexDirection: 'row',
@@ -217,7 +221,7 @@ const styles = StyleSheet.create({
     },
     timeText: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         color: Colors.darkGray,
     },
     dashText: {
@@ -229,6 +233,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: Colors.gray,
         marginLeft: 8,
+        fontWeight: '500',
     },
     infoRow: {
         flexDirection: 'row',
@@ -239,28 +244,30 @@ const styles = StyleSheet.create({
     infoText: {
         fontSize: 14,
         color: Colors.gray,
+        fontWeight: '500',
     },
     infoTextDivider: {
         fontSize: 14,
         color: Colors.gray,
         marginLeft: 8,
+        fontWeight: '500',
     },
     extraPaymentText: {
         fontSize: 14,
         color: Colors.success,
         marginLeft: 8,
-        fontWeight: '500',
+        fontWeight: '600',
     },
     earningsText: {
-        fontSize: 20,
-        fontWeight: 'bold',
+        fontSize: 22,
+        fontWeight: '800',
         color: Colors.primary,
         marginBottom: 8,
     },
     syncBadge: {
         alignSelf: 'flex-start',
         borderWidth: 1,
-        borderRadius: 999,
+        borderRadius: 8,
         paddingHorizontal: 10,
         paddingVertical: 4,
         marginBottom: 8,
@@ -273,5 +280,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: Colors.gray,
         fontStyle: 'italic',
+        marginTop: 4,
     },
 });

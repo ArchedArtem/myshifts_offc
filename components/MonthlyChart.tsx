@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
 import Colors from '@/constants/Colors';
 import { getDaysInMonth, format, getDate } from 'date-fns';
-import { calculateEarnings } from '@/utils/calculations'; // Твоя функция расчета
+import { calculateEarnings } from '@/utils/calculations';
+import { useTheme } from '@/hooks/useTheme';
 
 interface Shift {
     id: string | number;
@@ -23,6 +24,7 @@ interface MonthlyChartProps {
 }
 
 export default function MonthlyChart({ shifts, currentDate, includeNdfl, applyNdfl }: MonthlyChartProps) {
+    const { theme } = useTheme();
     const screenWidth = Dimensions.get('window').width;
 
     const chartData = useMemo(() => {
@@ -68,15 +70,13 @@ export default function MonthlyChart({ shifts, currentDate, includeNdfl, applyNd
                 )
             };
         });
-    }, [shifts, currentDate, includeNdfl, applyNdfl]);
+    }, [shifts, currentDate, includeNdfl, applyNdfl, theme]);
 
     const rawMaxValue = Math.max(...chartData.map(d => d.value));
 
-    // Функция для расчета ровных и красивых шагов (1k, 2k, 5k и тд)
     const getNiceScale = (max: number, sections: number) => {
         if (max === 0) return { niceMax: 4000, niceStep: 1000 };
 
-        // Даем 10% запаса сверху, чтобы самый высокий столбик не упирался в потолок
         const targetMax = max * 1.1;
         const roughStep = targetMax / sections;
         const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
@@ -99,6 +99,8 @@ export default function MonthlyChart({ shifts, currentDate, includeNdfl, applyNd
     const sectionsCount = 4;
     const { niceMax, niceStep } = getNiceScale(rawMaxValue, sectionsCount);
 
+    const styles = createStyles();
+
     return (
         <View style={styles.card}>
             <View style={styles.headerRow}>
@@ -115,6 +117,7 @@ export default function MonthlyChart({ shifts, currentDate, includeNdfl, applyNd
             ) : (
                 <View style={styles.chartWrap}>
                     <BarChart
+                        key={theme}
                         data={chartData}
                         barWidth={16}
                         spacing={12}
@@ -146,19 +149,18 @@ export default function MonthlyChart({ shifts, currentDate, includeNdfl, applyNd
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
     card: {
         backgroundColor: Colors.white,
-        borderRadius: 16,
-        padding: 16,
-        marginTop: 16,
+        borderRadius: 20,
+        padding: 20,
         marginHorizontal: 16,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
+        marginBottom: 16,
+        shadowColor: Colors.black,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 3,
     },
     headerRow: {
         flexDirection: 'row',
@@ -168,15 +170,15 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 18,
-        fontWeight: 'bold',
+        fontWeight: '800',
         color: Colors.darkGray,
     },
     swipeHint: {
         fontSize: 12,
         color: Colors.gray,
-        fontWeight: '500',
+        fontWeight: '600',
         backgroundColor: Colors.lightGray,
-        paddingHorizontal: 8,
+        paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 12,
         overflow: 'hidden',
@@ -192,5 +194,6 @@ const styles = StyleSheet.create({
     emptyText: {
         color: Colors.gray,
         fontSize: 14,
+        fontWeight: '500',
     }
 });
