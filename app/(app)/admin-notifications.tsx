@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   View,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  KeyboardAvoidingView
 } from 'react-native';
 import Colors from '@/constants/Colors';
 import { useTheme } from '@/hooks/useTheme';
@@ -174,129 +175,139 @@ export default function AdminNotificationsScreen() {
   }
 
   return (
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Админ-панель</Text>
-          <Text style={styles.subtitle}>Рассылка внутренних уведомлений для пользователей.</Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.label}>Кому отправить</Text>
-          <View style={styles.segmentedControl}>
-            <TouchableOpacity
-                style={[styles.segmentButton, targetMode === 'all' && styles.segmentButtonActive]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setTargetMode('all');
-                  setSelectedUser(null);
-                  setEmailQuery('');
-                  setSearchResults([]);
-                }}
-                activeOpacity={0.8}
-            >
-              <Text style={[styles.segmentText, targetMode === 'all' && styles.segmentTextActive]}>Всем</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-                style={[styles.segmentButton, targetMode === 'single' && styles.segmentButtonActive]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setTargetMode('single');
-                }}
-                activeOpacity={0.8}
-            >
-              <Text style={[styles.segmentText, targetMode === 'single' && styles.segmentTextActive]}>По email</Text>
-            </TouchableOpacity>
+      <KeyboardAvoidingView
+          style={styles.screen}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+      >
+        <ScrollView
+            style={styles.screen}
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Админ-панель</Text>
+            <Text style={styles.subtitle}>Рассылка внутренних уведомлений для пользователей.</Text>
           </View>
 
-          {targetMode === 'single' && (
-              <View style={styles.singleUserSection}>
-                <Text style={styles.label}>Поиск пользователя</Text>
-                <TextInput
-                    style={styles.input}
-                    value={emailQuery}
-                    onChangeText={(value) => { void handleEmailChange(value); }}
-                    placeholder="Введите email или имя..."
-                    placeholderTextColor={Colors.gray}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                />
+          <View style={styles.card}>
+            <Text style={styles.label}>Кому отправить</Text>
+            <View style={styles.segmentedControl}>
+              <TouchableOpacity
+                  style={[styles.segmentButton, targetMode === 'all' && styles.segmentButtonActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTargetMode('all');
+                    setSelectedUser(null);
+                    setEmailQuery('');
+                    setSearchResults([]);
+                  }}
+                  activeOpacity={0.8}
+              >
+                <Text style={[styles.segmentText, targetMode === 'all' && styles.segmentTextActive]}>Всем</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                  style={[styles.segmentButton, targetMode === 'single' && styles.segmentButtonActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTargetMode('single');
+                  }}
+                  activeOpacity={0.8}
+              >
+                <Text style={[styles.segmentText, targetMode === 'single' && styles.segmentTextActive]}>По email</Text>
+              </TouchableOpacity>
+            </View>
 
-                {selectedUser && (
-                    <View style={styles.selectedBadge}>
-                      <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
-                      <Text style={styles.selectedHint}>
-                        Выбран: {selectedUser.email}
-                      </Text>
-                    </View>
-                )}
+            {targetMode === 'single' && (
+                <View style={styles.singleUserSection}>
+                  <Text style={styles.label}>Поиск пользователя</Text>
+                  <TextInput
+                      style={styles.input}
+                      value={emailQuery}
+                      onChangeText={(value) => { void handleEmailChange(value); }}
+                      placeholder="Введите email или имя..."
+                      placeholderTextColor={Colors.gray}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                  />
 
-                {searching ? (
-                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginTop: 12 }} />
-                ) : searchResults.length > 0 ? (
-                    <View style={styles.resultsContainer}>
-                      {searchResults.map((item) => (
-                          <TouchableOpacity
-                              key={item.id}
-                              style={styles.resultRow}
-                              onPress={() => {
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                setSelectedUser(item);
-                                setEmailQuery(item.email);
-                                setSearchResults([]);
-                              }}
-                          >
-                            <View>
-                              <Text style={styles.resultEmail}>{item.email}</Text>
-                              <Text style={styles.resultName}>{item.full_name?.trim() || 'Без имени'}</Text>
-                            </View>
-                            <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
-                          </TouchableOpacity>
-                      ))}
-                    </View>
-                ) : null}
-              </View>
-          )}
-        </View>
+                  {selectedUser && (
+                      <View style={styles.selectedBadge}>
+                        <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                        <Text style={styles.selectedHint}>
+                          Выбран: {selectedUser.email}
+                        </Text>
+                      </View>
+                  )}
 
-        <View style={styles.card}>
-          <Text style={styles.label}>Заголовок</Text>
-          <TextInput
-              style={styles.input}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Например: Технические работы"
-              placeholderTextColor={Colors.gray}
-          />
+                  {searching ? (
+                      <ActivityIndicator size="small" color={Colors.primary} style={{ marginTop: 12 }} />
+                  ) : searchResults.length > 0 ? (
+                      <View style={styles.resultsContainer}>
+                        {searchResults.map((item) => (
+                            <TouchableOpacity
+                                key={item.id}
+                                style={styles.resultRow}
+                                onPress={() => {
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                  setSelectedUser(item);
+                                  setEmailQuery(item.email);
+                                  setSearchResults([]);
+                                }}
+                            >
+                              <View>
+                                <Text style={styles.resultEmail}>{item.email}</Text>
+                                <Text style={styles.resultName}>{item.full_name?.trim() || 'Без имени'}</Text>
+                              </View>
+                              <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
+                            </TouchableOpacity>
+                        ))}
+                      </View>
+                  ) : null}
+                </View>
+            )}
+          </View>
 
-          <Text style={[styles.label, { marginTop: 20 }]}>Текст сообщения</Text>
-          <TextInput
-              style={[styles.input, styles.textarea]}
-              value={body}
-              onChangeText={setBody}
-              placeholder="Введите содержание..."
-              placeholderTextColor={Colors.gray}
-              multiline
-              numberOfLines={5}
-          />
-        </View>
+          <View style={styles.card}>
+            <Text style={styles.label}>Заголовок</Text>
+            <TextInput
+                style={styles.input}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Например: Технические работы"
+                placeholderTextColor={Colors.gray}
+            />
 
-        <TouchableOpacity
-            style={[styles.saveButton, (saving || !title || !body) && styles.disabled]}
-            onPress={handleCreate}
-            disabled={saving || !title || !body}
-            activeOpacity={0.8}
-        >
-          {saving ? (
-              <ActivityIndicator color={Colors.onPrimary} />
-          ) : (
-              <>
-                <Ionicons name="send-outline" size={18} color={Colors.onPrimary} style={{ marginRight: 8 }} />
-                <Text style={styles.saveText}>Отправить уведомление</Text>
-              </>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
+            <Text style={[styles.label, { marginTop: 20 }]}>Текст сообщения</Text>
+            <TextInput
+                style={[styles.input, styles.textarea]}
+                value={body}
+                onChangeText={setBody}
+                placeholder="Введите содержание..."
+                placeholderTextColor={Colors.gray}
+                multiline
+                numberOfLines={5}
+            />
+          </View>
+
+          <TouchableOpacity
+              style={[styles.saveButton, (saving || !title || !body) && styles.disabled]}
+              onPress={handleCreate}
+              disabled={saving || !title || !body}
+              activeOpacity={0.8}
+          >
+            {saving ? (
+                <ActivityIndicator color={Colors.onPrimary} />
+            ) : (
+                <>
+                  <Ionicons name="send-outline" size={18} color={Colors.onPrimary} style={{ marginRight: 8 }} />
+                  <Text style={styles.saveText}>Отправить уведомление</Text>
+                </>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
   );
 }
 
