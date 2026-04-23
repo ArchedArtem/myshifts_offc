@@ -11,6 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
@@ -51,10 +52,61 @@ export default function ShiftTemplatesScreen() {
     if (!user) return;
     setLoadingInitial(true);
     try {
-      const data = await loadCustomShiftTemplates(user.id);
+      let data = await loadCustomShiftTemplates(user.id);
+      await AsyncStorage.setItem(`@cached_templates_${user.id}`, JSON.stringify(data));
+
+      const queueRaw = await AsyncStorage.getItem(`@offline_templates_${user.id}`);
+      const queue = queueRaw ? JSON.parse(queueRaw) : [];
+      const delQueueRaw = await AsyncStorage.getItem(`@offline_delete_templates_${user.id}`);
+      const delQueue = delQueueRaw ? JSON.parse(delQueueRaw) : [];
+
+      if (queue.length > 0 || delQueue.length > 0) {
+        let hasErrors = false;
+
+        for (const t of queue) {
+          try {
+            await createCustomShiftTemplate(user.id, {
+              name: t.name,
+              startTime: t.startTime,
+              endTime: t.endTime,
+              breakMinutes: t.breakMinutes,
+            });
+          } catch (e) { hasErrors = true; }
+        }
+
+        for (const id of delQueue) {
+          try {
+            if (!id.startsWith('offline_')) {
+              await deleteCustomShiftTemplate(id, user.id);
+            }
+          } catch (e) { hasErrors = true; }
+        }
+
+        if (!hasErrors) {
+          await AsyncStorage.removeItem(`@offline_templates_${user.id}`);
+          await AsyncStorage.removeItem(`@offline_delete_templates_${user.id}`);
+          data = await loadCustomShiftTemplates(user.id);
+          await AsyncStorage.setItem(`@cached_templates_${user.id}`, JSON.stringify(data));
+        }
+      }
+
       setCustomTemplates(data);
     } catch (error: any) {
-      Alert.alert('Ошибка', error.message || 'Не удалось загрузить шаблоны');
+      if (error.message?.includes('Network request failed') || error.message?.includes('Failed to fetch')) {
+        const cachedRaw = await AsyncStorage.getItem(`@cached_templates_${user.id}`);
+        const cached = cachedRaw ? JSON.parse(cachedRaw) : [];
+
+        const queueRaw = await AsyncStorage.getItem(`@offline_templates_${user.id}`);
+        const queue = queueRaw ? JSON.parse(queueRaw) : [];
+
+        const delQueueRaw = await AsyncStorage.getItem(`@offline_delete_templates_${user.id}`);
+        const delQueue = delQueueRaw ? JSON.parse(delQueueRaw) : [];
+
+        const combined = [...cached, ...queue].filter((t: any) => !delQueue.includes(t.id));
+        setCustomTemplates(combined);
+      } else {
+        Alert.alert('Ошибка', error.message || 'Не удалось загрузить шаблоны');
+      }
     } finally {
       setLoadingInitial(false);
     }
@@ -80,10 +132,7 @@ export default function ShiftTemplatesScreen() {
       return;
     }
 
-    if (!user) {
-      Alert.alert('Ошибка', 'Пользователь не найден');
-      return;
-    }
+    if (!user) return;
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -99,8 +148,29 @@ export default function ShiftTemplatesScreen() {
       setForm(emptyForm);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Ошибка', error.message || 'Не удалось сохранить шаблон');
+      if (error.message?.includes('Network request failed') || error.message?.includes('Failed to fetch')) {
+        const newTemplate: ShiftTemplate = {
+          id: `offline_${Date.now()}`,
+          user_id: user.id,
+          name,
+          startTime,
+          endTime,
+          breakMinutes,
+        };
+
+        const queueRaw = await AsyncStorage.getItem(`@offline_templates_${user.id}`);
+        const queue = queueRaw ? JSON.parse(queueRaw) : [];
+        queue.push(newTemplate);
+        await AsyncStorage.setItem(`@offline_templates_${user.id}`, JSON.stringify(queue));
+
+        setCustomTemplates((prev) => [...prev, newTemplate]);
+        setForm(emptyForm);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Офлайн', 'Шаблон сохранен локально и будет синхронизирован позже.');
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Ошибка', error.message || 'Не удалось сохранить шаблон');
+      }
     } finally {
       setSaving(false);
     }
@@ -117,10 +187,32 @@ export default function ShiftTemplatesScreen() {
         onPress: async () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           try {
+            // Если удаляем локальный шаблон, который еще не ушел на сервер
+            if (templateId.startsWith('offline_')) {
+              const queueRaw = await AsyncStorage.getItem(`@offline_templates_${user.id}`);
+              let queue = queueRaw ? JSON.parse(queueRaw) : [];
+              queue = queue.filter((t: any) => t.id !== templateId);
+              await AsyncStorage.setItem(`@offline_templates_${user.id}`, JSON.stringify(queue));
+
+              setCustomTemplates((prev) => prev.filter((item) => item.id !== templateId));
+              return;
+            }
+
             await deleteCustomShiftTemplate(templateId, user.id);
             setCustomTemplates((prev) => prev.filter((item) => item.id !== templateId));
           } catch (error: any) {
-            Alert.alert('Ошибка', error.message || 'Не удалось удалить шаблон');
+            if (error.message?.includes('Network request failed') || error.message?.includes('Failed to fetch')) {
+              // ОФЛАЙН УДАЛЕНИЕ
+              const delQueueRaw = await AsyncStorage.getItem(`@offline_delete_templates_${user.id}`);
+              const delQueue = delQueueRaw ? JSON.parse(delQueueRaw) : [];
+              delQueue.push(templateId);
+              await AsyncStorage.setItem(`@offline_delete_templates_${user.id}`, JSON.stringify(delQueue));
+
+              setCustomTemplates((prev) => prev.filter((item) => item.id !== templateId));
+              Alert.alert('Офлайн', 'Удаление сохранено локально.');
+            } else {
+              Alert.alert('Ошибка', error.message || 'Не удалось удалить шаблон');
+            }
           }
         },
       },
@@ -234,7 +326,9 @@ export default function ShiftTemplatesScreen() {
             ) : customTemplates.map((template, index) => (
                 <View key={template.id} style={[styles.templateRow, index === customTemplates.length - 1 && styles.lastTemplateRow]}>
                   <View style={styles.templateInfo}>
-                    <Text style={styles.templateName}>{template.name}</Text>
+                    <Text style={styles.templateName}>
+                      {template.name} {template.id.startsWith('offline_') && ' (Офлайн)'}
+                    </Text>
                     <Text style={styles.templateMeta}>
                       ⏰ {template.startTime} — {template.endTime}
                     </Text>

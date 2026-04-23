@@ -4,6 +4,7 @@ import { supabase } from '@/services/supabase/client';
 const SHIFT_TEMPLATES_CACHE_KEY = 'myshifts_shift_templates_cache_v1';
 
 export type ShiftTemplate = {
+  user_id?: string;
   id: string;
   name: string;
   startTime: string;
