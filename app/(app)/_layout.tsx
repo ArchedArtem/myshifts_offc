@@ -60,7 +60,7 @@ export default function AppLayout() {
                     tabBarStyle: {
                         backgroundColor: Colors.white,
                         borderTopWidth: 0,
-                        paddingTop: 10,
+                        paddingTop: 5,
                         height: Platform.OS === 'ios' ? 90 : 115,
                         paddingBottom: Platform.OS === 'ios' ? 30 : 40,
                         elevation: 25,
