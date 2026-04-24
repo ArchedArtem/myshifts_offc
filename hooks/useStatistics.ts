@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/services/supabase/client';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { getAllShiftsOfflineAware } from '@/services/offlineShifts';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MonthlyStat {
     month: string;
@@ -34,6 +34,7 @@ interface UseStatisticsReturn {
 }
 
 export function useStatistics() {
+    const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [yearlyStats, setYearlyStats] = useState<YearlyStats | null>(null);
 
@@ -41,8 +42,7 @@ export function useStatistics() {
         try {
             setLoading(true);
 
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Пользователь не авторизован');
+            if (!user?.id) throw new Error('Пользователь не авторизован');
 
             const targetYear = year || new Date().getFullYear();
             const startDate = `${targetYear}-01-01`;
@@ -56,7 +56,7 @@ export function useStatistics() {
             const monthlyData: { [key: string]: MonthlyStat } = {};
 
             shifts.forEach(shift => {
-                const month = shift.date.substring(0, 7); // YYYY-MM
+                const month = shift.date.substring(0, 7);
                 const duration = calculateDuration(shift.start_time, shift.end_time);
 
                 if (!monthlyData[month]) {
@@ -112,12 +112,11 @@ export function useStatistics() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [user?.id]);
 
     const getMonthStats = useCallback(async (date: Date): Promise<MonthlyStat> => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Пользователь не авторизован');
+            if (!user?.id) throw new Error('Пользователь не авторизован');
 
             const start = format(startOfMonth(date), 'yyyy-MM-dd');
             const end = format(endOfMonth(date), 'yyyy-MM-dd');
@@ -143,12 +142,11 @@ export function useStatistics() {
             console.error('Error fetching month stats:', error);
             throw error;
         }
-    }, []);
+    }, [user?.id]);
 
     const getShiftStats = useCallback(async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Пользователь не авторизован');
+            if (!user?.id) throw new Error('Пользователь не авторизован');
 
             const { shifts: allShifts } = await getAllShiftsOfflineAware(user.id);
             const shifts = allShifts.slice(0, 1000);
@@ -196,7 +194,7 @@ export function useStatistics() {
             console.error('Error fetching shift stats:', error);
             throw error;
         }
-    }, []);
+    }, [user?.id]);
 
     const calculateDuration = (startTime: string, endTime: string): number => {
         const [startH, startM] = startTime.split(':').map(Number);

@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import { calculateEarnings } from '@/utils/calculations';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { deleteShiftOfflineAware, getShiftsWithOffline, saveShiftOfflineAware, getCachedShifts } from '@/services/offlineShifts';
-import { supabase } from '@/services/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 const withTimeout = (promise: Promise<any>, ms: number) => {
     return Promise.race([
@@ -41,7 +41,8 @@ interface UseShiftsReturn {
     refreshShifts: () => Promise<void>;
 }
 
-export function useShifts(userId?: string) {
+export function useShifts(providedUserId?: string) {
+    const { user } = useAuth();
     const [shifts, setShifts] = useState<Shift[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -52,7 +53,7 @@ export function useShifts(userId?: string) {
             if (shifts.length === 0) setLoading(true);
             setError(null);
 
-            const resolvedUserId = userId || (await supabase.auth.getSession()).data.session?.user?.id;
+            const resolvedUserId = providedUserId || user?.id;
             if (!resolvedUserId) {
                 setLoading(false);
                 return;
@@ -84,14 +85,14 @@ export function useShifts(userId?: string) {
         } finally {
             setLoading(false);
         }
-    }, [userId, shifts.length]);
+    }, [providedUserId, user?.id, shifts.length]);
 
     const addShift = useCallback(async (
         shiftData: Omit<Shift, 'id' | 'user_id' | 'created_at' | 'updated_at'>
     ): Promise<Shift | null> => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Пользователь не авторизован');
+            const resolvedUserId = providedUserId || user?.id;
+            if (!resolvedUserId) throw new Error('Пользователь не авторизован');
 
             const earnings = calculateEarnings(
                 shiftData.start_time,
@@ -102,12 +103,12 @@ export function useShifts(userId?: string) {
 
             const newShift = {
                 ...shiftData,
-                user_id: user.id,
+                user_id: resolvedUserId,
                 earnings,
             };
 
             const result = await saveShiftOfflineAware({
-                userId: user.id,
+                userId: resolvedUserId,
                 isEdit: false,
                 shiftData: newShift,
             });
@@ -125,15 +126,15 @@ export function useShifts(userId?: string) {
             Alert.alert('Ошибка', err.message);
             return null;
         }
-    }, []);
+    }, [providedUserId, user?.id]);
 
     const updateShift = useCallback(async (
         id: string,
         shiftData: Partial<Shift>
     ): Promise<boolean> => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Пользователь не авторизован');
+            const resolvedUserId = providedUserId || user?.id;
+            if (!resolvedUserId) throw new Error('Пользователь не авторизован');
 
             if (shiftData.start_time || shiftData.end_time || shiftData.hourly_rate || shiftData.extra_payment) {
                 const existingShift = shifts.find(s => s.id === id);
@@ -149,10 +150,10 @@ export function useShifts(userId?: string) {
             }
 
             await saveShiftOfflineAware({
-                userId: user.id,
+                userId: resolvedUserId,
                 isEdit: true,
                 shiftId: id,
-                shiftData: { ...shiftData, user_id: user.id } as any,
+                shiftData: { ...shiftData, user_id: resolvedUserId } as any,
             });
 
             setShifts(prev => prev.map(shift =>
@@ -163,14 +164,14 @@ export function useShifts(userId?: string) {
             Alert.alert('Ошибка', err.message);
             return false;
         }
-    }, [shifts]);
+    }, [shifts, providedUserId, user?.id]);
 
     const deleteShift = useCallback(async (id: string): Promise<boolean> => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Пользователь не авторизован');
+            const resolvedUserId = providedUserId || user?.id;
+            if (!resolvedUserId) throw new Error('Пользователь не авторизован');
 
-            await deleteShiftOfflineAware({ userId: user.id, shiftId: id });
+            await deleteShiftOfflineAware({ userId: resolvedUserId, shiftId: id });
 
             setShifts(prev => prev.filter(shift => shift.id !== id));
             return true;
@@ -178,7 +179,7 @@ export function useShifts(userId?: string) {
             Alert.alert('Ошибка', err.message);
             return false;
         }
-    }, []);
+    }, [providedUserId, user?.id]);
 
     const getShiftsByDate = useCallback((date: string): Shift[] => {
         return shifts.filter(shift => shift.date === date);
