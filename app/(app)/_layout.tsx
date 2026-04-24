@@ -11,10 +11,12 @@ import { syncPushTokenForUser } from '@/services/notifications';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import ModernLoader from '@/components/ModernLoader';
 import * as Haptics from '@/utils/haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function AppLayout() {
     const { session, loading } = useAuth();
     const { theme } = useTheme();
+    const insets = useSafeAreaInsets();
 
     useEffect(() => {
         if (!session?.user?.id) return;
@@ -56,13 +58,16 @@ export default function AppLayout() {
                     tabBarActiveTintColor: Colors.primary,
                     tabBarInactiveTintColor: Colors.gray,
                     tabBarShowLabel: true,
-                    tabBarLabelStyle: styles.tabLabel,
+                    tabBarLabelStyle: {
+                        fontSize: 11,
+                        fontWeight: '700',
+                    },
                     tabBarStyle: {
                         backgroundColor: Colors.white,
                         borderTopWidth: 0,
-                        paddingTop: 5,
-                        height: Platform.OS === 'ios' ? 90 : 115,
-                        paddingBottom: Platform.OS === 'ios' ? 30 : 40,
+                        height: 60 + (insets.bottom > 0 ? insets.bottom : 10),
+                        paddingBottom: insets.bottom > 0 ? insets.bottom : 5,
+                        paddingTop: 3,
                         elevation: 25,
                         shadowColor: '#000',
                         shadowOffset: { width: 0, height: -4 },

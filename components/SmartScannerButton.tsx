@@ -1,4 +1,3 @@
-// Файл: components/SmartScannerButton.tsx
 import React, {useState} from 'react';
 import {TouchableOpacity, Text, StyleSheet, View, Modal, ScrollView, Alert, ActivityIndicator, TextInput} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,8 +9,10 @@ import {scanScheduleImage} from '@/services/aiScanner';
 import {useShifts} from '@/hooks/useShifts';
 import {useAuth} from '@/hooks/useAuth';
 import {loadCachedProfile} from '@/services/profileCache';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function SmartScannerButton() {
+    useTheme();
     const [isScanning, setIsScanning] = useState(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [detectedShifts, setDetectedShifts] = useState<any[] | null>(null);
