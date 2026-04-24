@@ -49,30 +49,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        supabase.auth.getSession().then(async ({ data: { session } }) => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
             setUser(session?.user ?? null);
-            if (session?.user) {
-                await ensureProfile(session.user);
-            }
             setLoading(false);
+
+            if (session?.user) {
+                ensureProfile(session.user).catch(console.error);
+            }
         });
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (_event, session) => {
-                console.log('Auth state changed:', _event);
                 setSession(session);
                 setUser(session?.user ?? null);
-                if (session?.user) {
-                    ensureProfile(session.user);
-                }
                 setLoading(false);
+
+                if (session?.user) {
+                    ensureProfile(session.user).catch(console.error);
+                }
             }
         );
 
         return () => subscription.unsubscribe();
     }, []);
-
 
     useEffect(() => {
         if (user?.id) {
@@ -82,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         clearNextShiftWidgetState();
     }, [user?.id]);
+
     const sendOTP = async (email: string): Promise<void> => {
         const normalizedEmail = email.trim().toLowerCase();
 
@@ -121,8 +122,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const errorMessage = (error as any)?.message || '';
             const isMissingSession = errorMessage.toLowerCase().includes('auth session missing');
 
-            // В Expo Go/после долгого простоя локальная сессия может уже отсутствовать.
-            // Это состояние для выхода считаем успешным, просто очищаем локальный state.
             if (error && !isMissingSession) throw error;
 
             setSession(null);
@@ -153,9 +152,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error(profileError.message || 'Не удалось удалить профиль');
         }
 
-        // Попытка удалить пользователя из Supabase Auth.
-        // В некоторых конфигурациях этот endpoint закрыт для клиентского anon key.
-        // Тогда считаем удаление успешным после очистки данных приложения и выхода из аккаунта.
         const { data } = await supabase.auth.getSession();
         const accessToken = data.session?.access_token;
 

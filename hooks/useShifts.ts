@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { calculateEarnings } from '@/utils/calculations';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { deleteShiftOfflineAware, getShiftsWithOffline, saveShiftOfflineAware } from '@/services/offlineShifts';
+import { deleteShiftOfflineAware, getShiftsWithOffline, saveShiftOfflineAware, getCachedShifts } from '@/services/offlineShifts';
 import { supabase } from '@/services/supabase/client';
 
 const withTimeout = (promise: Promise<any>, ms: number) => {
@@ -62,14 +62,25 @@ export function useShifts(userId?: string) {
             const start = format(startOfMonth(targetDate), 'yyyy-MM-dd');
             const end = format(endOfMonth(targetDate), 'yyyy-MM-dd');
 
-            const payload = await withTimeout(
-                getShiftsWithOffline({ userId: resolvedUserId, start, end }),
-                4000
-            );
+            const localCache = await getCachedShifts(resolvedUserId);
+            const localRange = localCache.filter(s => s.date >= start && s.date <= end);
+            if (localRange.length > 0) {
+                setShifts(localRange as Shift[]);
+                setLoading(false);
+            }
 
-            setShifts(payload.shifts as Shift[]);
+            try {
+                const payload = await withTimeout(
+                    getShiftsWithOffline({ userId: resolvedUserId, start, end }),
+                    4000
+                );
+                setShifts(payload.shifts as Shift[]);
+            } catch (err: any) {
+                console.log('Синхронизация прервана (оффлайн/таймаут), используем кэш.');
+            }
+
         } catch (err: any) {
-            console.error('Error fetching shifts (offline/timeout):', err);
+            console.error('Error in fetchShifts:', err);
         } finally {
             setLoading(false);
         }

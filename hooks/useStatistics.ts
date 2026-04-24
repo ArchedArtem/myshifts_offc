@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/services/supabase/client';
-import { format, startOfMonth, endOfMonth, subMonths, eachMonthOfInterval } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { getAllShiftsOfflineAware } from '@/services/offlineShifts';
 
 interface MonthlyStat {
     month: string;
@@ -47,19 +48,11 @@ export function useStatistics() {
             const startDate = `${targetYear}-01-01`;
             const endDate = `${targetYear}-12-31`;
 
-            const { data, error } = await supabase
-                .from('shifts')
-                .select('*')
-                .eq('user_id', user.id)
-                .gte('date', startDate)
-                .lte('date', endDate)
-                .order('date');
+            const { shifts: allShifts } = await getAllShiftsOfflineAware(user.id);
+            const shifts = allShifts.filter(shift =>
+                shift.date >= startDate && shift.date <= endDate
+            );
 
-            if (error) throw error;
-
-            const shifts = data || [];
-
-            // Группируем по месяцам
             const monthlyData: { [key: string]: MonthlyStat } = {};
 
             shifts.forEach(shift => {
@@ -81,20 +74,17 @@ export function useStatistics() {
                 monthlyData[month].shifts += 1;
             });
 
-            // Рассчитываем средние значения
             const monthlyStats = Object.values(monthlyData).map(stat => ({
                 ...stat,
                 averagePerHour: stat.hours > 0 ? stat.earnings / stat.hours : 0,
             }));
 
-            // Общая статистика за год
             const totalEarnings = monthlyStats.reduce((sum, stat) => sum + stat.earnings, 0);
             const totalHours = monthlyStats.reduce((sum, stat) => sum + stat.hours, 0);
             const totalShifts = monthlyStats.reduce((sum, stat) => sum + stat.shifts, 0);
             const averagePerShift = totalShifts > 0 ? totalEarnings / totalShifts : 0;
             const averagePerHour = totalHours > 0 ? totalEarnings / totalHours : 0;
 
-            // Лучший месяц по заработку
             const bestMonth = monthlyStats.length > 0
                 ? monthlyStats.reduce((best, current) =>
                     current.earnings > best.earnings ? current : best
@@ -132,16 +122,11 @@ export function useStatistics() {
             const start = format(startOfMonth(date), 'yyyy-MM-dd');
             const end = format(endOfMonth(date), 'yyyy-MM-dd');
 
-            const { data, error } = await supabase
-                .from('shifts')
-                .select('*')
-                .eq('user_id', user.id)
-                .gte('date', start)
-                .lte('date', end);
+            const { shifts: allShifts } = await getAllShiftsOfflineAware(user.id);
+            const shifts = allShifts.filter(shift =>
+                shift.date >= start && shift.date <= end
+            );
 
-            if (error) throw error;
-
-            const shifts = data || [];
             const earnings = shifts.reduce((sum, shift) => sum + shift.earnings, 0);
             const hours = shifts.reduce((sum, shift) =>
                 sum + calculateDuration(shift.start_time, shift.end_time), 0);
@@ -165,15 +150,8 @@ export function useStatistics() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Пользователь не авторизован');
 
-            const { data, error } = await supabase
-                .from('shifts')
-                .select('start_time, end_time')
-                .eq('user_id', user.id)
-                .limit(1000);
-
-            if (error) throw error;
-
-            const shifts = data || [];
+            const { shifts: allShifts } = await getAllShiftsOfflineAware(user.id);
+            const shifts = allShifts.slice(0, 1000);
 
             if (shifts.length === 0) {
                 return {
@@ -183,21 +161,18 @@ export function useStatistics() {
                 };
             }
 
-            // Средняя продолжительность смены
             let totalDuration = 0;
             shifts.forEach(shift => {
                 totalDuration += calculateDuration(shift.start_time, shift.end_time);
             });
             const averageDuration = totalDuration / shifts.length;
 
-            // Самое частое время начала
             const startTimeCounts: { [key: string]: number } = {};
             shifts.forEach(shift => {
                 const roundedStart = roundToNearest15(shift.start_time);
                 startTimeCounts[roundedStart] = (startTimeCounts[roundedStart] || 0) + 1;
             });
 
-            // Самое частое время окончания
             const endTimeCounts: { [key: string]: number } = {};
             shifts.forEach(shift => {
                 const roundedEnd = roundToNearest15(shift.end_time);
@@ -223,7 +198,6 @@ export function useStatistics() {
         }
     }, []);
 
-    // Вспомогательные функции
     const calculateDuration = (startTime: string, endTime: string): number => {
         const [startH, startM] = startTime.split(':').map(Number);
         const [endH, endM] = endTime.split(':').map(Number);
