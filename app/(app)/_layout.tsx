@@ -20,6 +20,7 @@ export default function AppLayout() {
 
     useEffect(() => {
         if (!session?.user?.id) return;
+
         showLatestUnreadAnnouncement(session.user.id);
         const runPushSync = async () => {
             try {
@@ -34,6 +35,7 @@ export default function AppLayout() {
             stopShiftSyncEngine();
             return;
         }
+
         const stop = startShiftSyncEngine(session.user.id, {
             onSynced: async () => {
                 await syncNextShiftWidgetForUser(session.user.id);
@@ -110,7 +112,6 @@ export default function AppLayout() {
                     }}
                 />
 
-                {/* Скрытые экраны */}
                 <Tabs.Screen name="shift-edit" options={{ href: null }} />
                 <Tabs.Screen name="settings" options={{ href: null }} />
                 <Tabs.Screen name="notifications" options={{ href: null }} />
@@ -126,11 +127,3 @@ export default function AppLayout() {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    tabLabel: {
-        fontSize: 11,
-        fontWeight: '700',
-        marginTop: 2,
-    },
-});

@@ -10,29 +10,28 @@ import {useShifts} from '@/hooks/useShifts';
 import {useAuth} from '@/hooks/useAuth';
 import {loadCachedProfile} from '@/services/profileCache';
 import { useTheme } from '@/hooks/useTheme';
+import { supabase } from '@/services/supabase/client';
 
 export default function SmartScannerButton() {
     useTheme();
     const [isScanning, setIsScanning] = useState(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [detectedShifts, setDetectedShifts] = useState<any[] | null>(null);
-    const [showIntro, setShowIntro] = useState(false); // Стейт для инструкции
+    const [showIntro, setShowIntro] = useState(false);
+
+    const [showMaintenance, setShowMaintenance] = useState(false);
+    const [maintenanceMsg, setMaintenanceMsg] = useState('');
+
     const {user} = useAuth();
     const {addShift} = useShifts();
 
     const formatScanDate = (dateString: string) => {
         try {
             const date = new Date(`${dateString}T12:00:00`);
-
             if (isNaN(date.getTime())) return dateString;
-
             let formatted = date.toLocaleDateString('ru-RU', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-                weekday: 'short',
+                day: 'numeric', month: 'long', year: 'numeric', weekday: 'short',
             }).replace(' г.', '');
-
             return formatted.charAt(0).toUpperCase() + formatted.slice(1);
         } catch (e) {
             return dateString;
@@ -50,15 +49,27 @@ export default function SmartScannerButton() {
 
     const handleScannerPress = async () => {
         try {
-            const hasSeenIntro = await AsyncStorage.getItem('@ai_scanner_intro_seen');
+            const { data } = await supabase
+                .from('remote_config')
+                .select('is_scanner_enabled, maintenance_message')
+                .eq('id', 1)
+                .single();
 
+            if (data && data.is_scanner_enabled === false) {
+                setMaintenanceMsg(data.maintenance_message || 'Функция временно недоступна.');
+                setShowMaintenance(true);
+                try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch(e){}
+                return;
+            }
+        } catch (e) {
+        }
+
+        try {
+            const hasSeenIntro = await AsyncStorage.getItem('@ai_scanner_intro_seen');
             if (hasSeenIntro === 'true') {
                 handlePickImage();
             } else {
-                try {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                } catch (e) {
-                }
+                try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) {}
                 setShowIntro(true);
             }
         } catch (error) {
@@ -90,10 +101,7 @@ export default function SmartScannerButton() {
         });
 
         if (!result.canceled && result.assets?.[0]?.uri) {
-            try {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            } catch (e) {
-            }
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) {}
             processImage(result.assets[0].uri);
         }
     };
@@ -107,28 +115,19 @@ export default function SmartScannerButton() {
                 throw new Error('empty_shifts');
             }
             setDetectedShifts(shifts);
-            try {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            } catch (e) {}
+            try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch (e) {}
         } catch (error: any) {
-            try {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            } catch (e) {}
+            try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch (e) {}
 
             const msg = (error?.message || '').toLowerCase();
-
             if (msg === 'empty_shifts') {
                 setScanError('Смены не найдены 🧐');
             } else {
                 const isOverloaded =
-                    msg.includes('demand') ||
-                    msg.includes('overloaded') ||
-                    msg.includes('temporary') ||
-                    msg.includes('quota') ||
-                    msg.includes('limit') ||
-                    msg.includes('перегружены') ||
-                    msg.includes('429') ||
-                    msg.includes('503');
+                    msg.includes('demand') || msg.includes('overloaded') ||
+                    msg.includes('temporary') || msg.includes('quota') ||
+                    msg.includes('limit') || msg.includes('перегружены') ||
+                    msg.includes('429') || msg.includes('503');
 
                 if (isOverloaded) {
                     setScanError('Сервера перегружены ⏳');
@@ -137,9 +136,7 @@ export default function SmartScannerButton() {
                 }
             }
 
-            setTimeout(() => {
-                setScanError(null);
-            }, 4000);
+            setTimeout(() => { setScanError(null); }, 4000);
         } finally {
             setIsScanning(false);
         }
@@ -147,7 +144,6 @@ export default function SmartScannerButton() {
 
     const handleConfirm = async () => {
         if (!detectedShifts || !user) return;
-
         try {
             const profile = await loadCachedProfile(user.id);
             const userRate = profile.default_hourly_rate ?? 0;
@@ -166,10 +162,7 @@ export default function SmartScannerButton() {
             }
 
             setDetectedShifts(null);
-            try {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } catch (e) {
-            }
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (e) {}
         } catch (error) {
             Alert.alert('Ошибка', 'Не удалось сохранить смены');
         }
@@ -201,6 +194,29 @@ export default function SmartScannerButton() {
                 )}
             </TouchableOpacity>
 
+            {/* Модалка Технических Работ */}
+            <Modal visible={showMaintenance} animationType="slide" transparent={true}>
+                <View style={styles.modalOverlayMaintenance}>
+                    <View style={[styles.modalContent, { alignItems: 'center', paddingBottom: 40, elevation: 15, shadowOpacity: 0.15 }]}>
+                        <View style={styles.maintenanceIconBg}>
+                            <AlertTriangle size={36} color={Colors.error} />
+                        </View>
+                        <Text style={styles.modalTitle}>Технические работы</Text>
+                        <Text style={styles.maintenanceText}>
+                            {maintenanceMsg}
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.introButton}
+                            onPress={() => setShowMaintenance(false)}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.introButtonText}>Понятно</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Интро AI Сканера */}
             <Modal visible={showIntro} animationType="fade" transparent={true}>
                 <View style={styles.modalOverlayIntro}>
                     <View style={styles.modalContentIntro}>
@@ -219,24 +235,22 @@ export default function SmartScannerButton() {
                             </View>
                             <View style={styles.stepItem}>
                                 <View style={styles.stepIconBg}><Sparkles size={20} color={Colors.primary}/></View>
-                                <Text style={styles.stepText}>Умный ИИ сам найдет даты, время работы и посчитает
-                                    перерывы</Text>
+                                <Text style={styles.stepText}>Умный ИИ сам найдет даты, время работы и посчитает перерывы</Text>
                             </View>
                             <View style={styles.stepItem}>
                                 <View style={styles.stepIconBg}><Check size={20} color={Colors.primary}/></View>
-                                <Text style={styles.stepText}>Проверьте результат и сохраните все смены в один
-                                    клик</Text>
+                                <Text style={styles.stepText}>Проверьте результат и сохраните все смены в один клик</Text>
                             </View>
                         </View>
 
-                        <TouchableOpacity style={styles.introButton} onPress={handleStartAfterIntro}
-                                          activeOpacity={0.8}>
+                        <TouchableOpacity style={styles.introButton} onPress={handleStartAfterIntro} activeOpacity={0.8}>
                             <Text style={styles.introButtonText}>Понятно, поехали!</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
 
+            {/* Вывод смен */}
             <Modal visible={!!detectedShifts} animationType="slide" transparent={true}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
@@ -249,9 +263,7 @@ export default function SmartScannerButton() {
                             {detectedShifts?.map((shift, index) => (
                                 <View key={index} style={styles.shiftItem}>
                                     <View style={styles.shiftDateRow}>
-                                        <Text style={styles.shiftDate}>
-                                            {formatScanDate(shift.date)}
-                                        </Text>
+                                        <Text style={styles.shiftDate}>{formatScanDate(shift.date)}</Text>
                                         <TextInput
                                             style={styles.shiftLabelInput}
                                             value={shift.title}
@@ -296,8 +308,7 @@ export default function SmartScannerButton() {
                         </ScrollView>
 
                         <View style={styles.modalActions}>
-                            <TouchableOpacity style={[styles.actionBtn, styles.cancelBtn]}
-                                              onPress={() => setDetectedShifts(null)}>
+                            <TouchableOpacity style={[styles.actionBtn, styles.cancelBtn]} onPress={() => setDetectedShifts(null)}>
                                 <X size={20} color={Colors.error}/>
                                 <Text style={styles.cancelText}>Отмена</Text>
                             </TouchableOpacity>
@@ -380,6 +391,13 @@ const styles = StyleSheet.create({
     buttonText: {color: Colors.onPrimary, fontSize: 16, fontWeight: '700'},
 
     modalOverlay: {flex: 1, justifyContent: 'flex-end'},
+
+    modalOverlayMaintenance: {
+        flex: 1,
+        justifyContent: 'flex-end',
+        backgroundColor: 'transparent'
+    },
+
     modalContent: {
         backgroundColor: Colors.white,
         borderTopLeftRadius: 32,
@@ -387,6 +405,10 @@ const styles = StyleSheet.create({
         padding: 24,
         paddingBottom: 40,
         maxHeight: '85%',
+        shadowColor: Colors.black,
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
     },
     modalHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24, gap: 10},
     modalTitle: {fontSize: 22, fontWeight: '800', color: Colors.darkGray},
@@ -448,7 +470,7 @@ const styles = StyleSheet.create({
         padding: 24,
         alignItems: 'center',
         elevation: 10,
-        shadowColor: '#000',
+        shadowColor: Colors.black,
         shadowOffset: {width: 0, height: 10},
         shadowOpacity: 0.2,
         shadowRadius: 20,
@@ -507,5 +529,24 @@ const styles = StyleSheet.create({
         color: Colors.onPrimary,
         fontSize: 16,
         fontWeight: '700',
+    },
+
+    maintenanceIconBg: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: Colors.lightError,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+        marginTop: 10,
+    },
+    maintenanceText: {
+        fontSize: 15,
+        color: Colors.gray,
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 30,
+        paddingHorizontal: 20,
     },
 });

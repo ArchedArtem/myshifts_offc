@@ -5,6 +5,13 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { deleteShiftOfflineAware, getShiftsWithOffline, saveShiftOfflineAware } from '@/services/offlineShifts';
 import { supabase } from '@/services/supabase/client';
 
+const withTimeout = (promise: Promise<any>, ms: number) => {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+    ]);
+};
+
 interface Shift {
     id: string;
     user_id: string;
@@ -42,24 +49,31 @@ export function useShifts(userId?: string) {
 
     const fetchShifts = useCallback(async (date?: Date) => {
         try {
-            setLoading(true);
+            if (shifts.length === 0) setLoading(true);
             setError(null);
 
             const resolvedUserId = userId || (await supabase.auth.getSession()).data.session?.user?.id;
-            if (!resolvedUserId) throw new Error('Пользователь не авторизован');
+            if (!resolvedUserId) {
+                setLoading(false);
+                return;
+            }
 
             const targetDate = date || new Date();
             const start = format(startOfMonth(targetDate), 'yyyy-MM-dd');
             const end = format(endOfMonth(targetDate), 'yyyy-MM-dd');
-            const payload = await getShiftsWithOffline({ userId: resolvedUserId, start, end });
+
+            const payload = await withTimeout(
+                getShiftsWithOffline({ userId: resolvedUserId, start, end }),
+                4000
+            );
+
             setShifts(payload.shifts as Shift[]);
         } catch (err: any) {
-            setError(err.message);
-            console.error('Error fetching shifts:', err);
+            console.error('Error fetching shifts (offline/timeout):', err);
         } finally {
             setLoading(false);
         }
-    }, [userId]);
+    }, [userId, shifts.length]);
 
     const addShift = useCallback(async (
         shiftData: Omit<Shift, 'id' | 'user_id' | 'created_at' | 'updated_at'>
@@ -110,7 +124,6 @@ export function useShifts(userId?: string) {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Пользователь не авторизован');
 
-            // Пересчитываем заработок если изменилось время или ставка
             if (shiftData.start_time || shiftData.end_time || shiftData.hourly_rate || shiftData.extra_payment) {
                 const existingShift = shifts.find(s => s.id === id);
                 if (existingShift) {
@@ -128,10 +141,7 @@ export function useShifts(userId?: string) {
                 userId: user.id,
                 isEdit: true,
                 shiftId: id,
-                shiftData: {
-                    ...shiftData,
-                    user_id: user.id,
-                } as any,
+                shiftData: { ...shiftData, user_id: user.id } as any,
             });
 
             setShifts(prev => prev.map(shift =>
@@ -182,9 +192,8 @@ export function useShifts(userId?: string) {
             }
             return sum + hours + (minutes / 60);
         }, 0);
-        const shiftCount = monthShifts.length;
 
-        return { totalEarnings, totalHours, shiftCount };
+        return { totalEarnings, totalHours, shiftCount: monthShifts.length };
     }, [shifts]);
 
     const refreshShifts = useCallback(async () => {
@@ -199,10 +208,8 @@ export function useShifts(userId?: string) {
     }, [fetchShifts]);
 
     useEffect(() => {
-        if (userId) {
-            fetchShifts();
-        }
-    }, [userId, fetchShifts]);
+        fetchShifts();
+    }, [fetchShifts]);
 
     return {
         shifts,

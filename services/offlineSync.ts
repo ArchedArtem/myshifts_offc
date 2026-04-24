@@ -1,4 +1,5 @@
 import { AppState, type AppStateStatus } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { getPendingOpsCount, refreshUserShiftsCache, syncPendingShiftOps } from '@/services/offlineShifts';
 import { getShiftSyncState, resetShiftSyncState, setShiftSyncState, type ShiftSyncState } from '@/services/shiftSyncState';
 
@@ -10,6 +11,7 @@ type SyncOptions = {
 let activeUserId: string | null = null;
 let syncInterval: ReturnType<typeof setInterval> | null = null;
 let appStateSubscription: { remove: () => void } | null = null;
+let netInfoSubscription: (() => void) | null = null; // Подписка на сеть
 let inFlightSync: Promise<ShiftSyncState> | null = null;
 
 const SYNC_INTERVAL_MS = 60000;
@@ -38,29 +40,23 @@ export const syncNow = async (userId: string, options?: SyncOptions): Promise<Sh
     return getShiftSyncState();
   }
 
-  if (inFlightSync) {
-    return inFlightSync;
-  }
+  if (inFlightSync) return inFlightSync;
 
   inFlightSync = (async () => {
     const pendingBefore = await getPendingOpsCount(userId);
     setShiftSyncState({
       syncing: true,
       pendingCount: pendingBefore,
-      status: getShiftSyncState().status === 'error' && pendingBefore > 0 ? 'error' : pendingBefore > 0 ? 'unsynced' : 'synced',
     });
 
     const result = await syncPendingShiftOps(userId);
 
     if (result.ok) {
       const shouldRefreshCache = options?.forceRefreshCache || pendingBefore > 0 || !getShiftSyncState().lastSyncedAt;
-      const shouldRunOnSyncedCallback = options?.forceRefreshCache || pendingBefore > 0;
       if (shouldRefreshCache) {
         try {
           await refreshUserShiftsCache(userId);
-        } catch {
-          // Не блокируем успешную синхронизацию очереди, если не удалось сразу обновить кэш.
-        }
+        } catch (e) {}
       }
 
       const pendingAfter = await getPendingOpsCount(userId);
@@ -72,7 +68,7 @@ export const syncNow = async (userId: string, options?: SyncOptions): Promise<Sh
         lastSyncedAt: new Date().toISOString(),
       });
 
-      if (pendingAfter === 0 && shouldRunOnSyncedCallback) {
+      if (pendingAfter === 0 && (options?.forceRefreshCache || pendingBefore > 0)) {
         await options?.onSynced?.();
       }
 
@@ -92,7 +88,7 @@ export const syncNow = async (userId: string, options?: SyncOptions): Promise<Sh
       syncing: false,
       pendingCount: result.pending,
       status: 'error',
-      lastError: result.errorMessage || 'Не удалось синхронизировать изменения',
+      lastError: result.errorMessage || 'Ошибка синхронизации',
     });
     return getShiftSyncState();
   })().finally(() => {
@@ -102,56 +98,41 @@ export const syncNow = async (userId: string, options?: SyncOptions): Promise<Sh
   return inFlightSync;
 };
 
-const handleAppStateChange = (nextState: AppStateStatus, userId: string, options?: SyncOptions) => {
-  if (nextState === 'active') {
-    syncNow(userId, options).catch(() => {
-      // Состояние уже будет отражено в глобальном баннере.
-    });
-  }
-};
-
 export const stopShiftSyncEngine = () => {
-  if (syncInterval) {
-    clearInterval(syncInterval);
-    syncInterval = null;
-  }
-
+  if (syncInterval) clearInterval(syncInterval);
+  syncInterval = null;
   appStateSubscription?.remove();
   appStateSubscription = null;
+
+  if (netInfoSubscription) netInfoSubscription(); // Отписываемся от сети
+  netInfoSubscription = null;
+
   activeUserId = null;
   resetShiftSyncState();
 };
 
 export const startShiftSyncEngine = (userId: string, options?: SyncOptions) => {
   stopShiftSyncEngine();
-
-  if (!userId) {
-    return () => {};
-  }
+  if (!userId) return () => {};
 
   activeUserId = userId;
 
-  refreshShiftSyncState(userId).catch(() => {
-    // Ничего не делаем: стартуем движок даже если очередь пока не прочиталась.
-  });
-
-  syncNow(userId, options).catch(() => {
-    // Ошибка отражается через global state.
-  });
+  refreshShiftSyncState(userId).catch(() => {});
+  syncNow(userId, options).catch(() => {});
 
   syncInterval = setInterval(() => {
-    if (!activeUserId) return;
-    syncNow(activeUserId, options).catch(() => {
-      // Состояние обновится внутри syncNow.
-    });
+    if (activeUserId) syncNow(activeUserId, options).catch(() => {});
   }, SYNC_INTERVAL_MS);
 
-  appStateSubscription = AppState.addEventListener('change', (nextState) => {
-    if (!activeUserId) return;
-    handleAppStateChange(nextState, activeUserId, options);
+  appStateSubscription = AppState.addEventListener('change', (state) => {
+    if (state === 'active' && activeUserId) syncNow(activeUserId, options).catch(() => {});
   });
 
-  return () => {
-    stopShiftSyncEngine();
-  };
+  netInfoSubscription = NetInfo.addEventListener(state => {
+    if (state.isConnected && state.isInternetReachable && activeUserId) {
+      syncNow(activeUserId, options).catch(() => {});
+    }
+  });
+
+  return () => stopShiftSyncEngine();
 };

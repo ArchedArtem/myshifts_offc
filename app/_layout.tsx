@@ -20,14 +20,17 @@ function LayoutInitializer() {
 
     useEffect(() => {
         registerNextShiftWidgetTask();
+
         if (!initialized) return;
 
         initializeNotifications();
 
-        setTimeout(() => {
+        const timer = setTimeout(() => {
             setAppIsReady(true);
             SplashScreen.hideAsync();
-        }, 500);
+        }, 300);
+
+        return () => clearTimeout(timer);
     }, [initialized]);
 
     if (!appIsReady || !initialized) {
@@ -41,9 +44,7 @@ function ThemedRootContainer() {
     const { theme } = useTheme();
 
     useEffect(() => {
-        SystemUI.setBackgroundColorAsync(Colors.background).catch(() => {
-            // ignore platform-level errors
-        });
+        SystemUI.setBackgroundColorAsync(Colors.background).catch(() => {});
 
         if (Platform.OS === 'android') {
             NativeStatusBar.setTranslucent(false);
@@ -65,8 +66,6 @@ function ThemedRootContainer() {
 }
 
 function ThemedProviders() {
-    useTheme();
-
     return (
         <SafeAreaProvider style={{ flex: 1, backgroundColor: Colors.background }}>
             <View style={{ flex: 1, backgroundColor: Colors.background }}>
