@@ -65,10 +65,9 @@ export function useShifts(providedUserId?: string) {
 
             const localCache = await getCachedShifts(resolvedUserId);
             const localRange = localCache.filter(s => s.date >= start && s.date <= end);
-            if (localRange.length > 0) {
-                setShifts(localRange as Shift[]);
-                setLoading(false);
-            }
+
+            setShifts(localRange as Shift[]);
+            setLoading(false);
 
             try {
                 const payload = await withTimeout(
@@ -77,7 +76,6 @@ export function useShifts(providedUserId?: string) {
                 );
                 setShifts(payload.shifts as Shift[]);
             } catch (err: any) {
-                console.log('Синхронизация прервана (оффлайн/таймаут), используем кэш.');
             }
 
         } catch (err: any) {

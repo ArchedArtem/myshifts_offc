@@ -1,7 +1,14 @@
 import { useState, useCallback } from 'react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { getAllShiftsOfflineAware } from '@/services/offlineShifts';
+import { getAllShiftsOfflineAware, getCachedShifts } from '@/services/offlineShifts';
 import { useAuth } from '@/hooks/useAuth';
+
+const withTimeout = (promise: Promise<any>, ms: number) => {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+    ]);
+};
 
 interface MonthlyStat {
     month: string;
@@ -38,78 +45,111 @@ export function useStatistics() {
     const [loading, setLoading] = useState(false);
     const [yearlyStats, setYearlyStats] = useState<YearlyStats | null>(null);
 
+    const calculateDuration = (startTime: string, endTime: string): number => {
+        const [startH, startM] = startTime.split(':').map(Number);
+        const [endH, endM] = endTime.split(':').map(Number);
+
+        let hours = endH - startH;
+        let minutes = endM - startM;
+
+        if (minutes < 0) {
+            hours -= 1;
+            minutes += 60;
+        }
+
+        return hours + (minutes / 60);
+    };
+
+    const roundToNearest15 = (time: string): string => {
+        const [hours, minutes] = time.split(':').map(Number);
+        const roundedMinutes = Math.round(minutes / 15) * 15;
+        const newHours = roundedMinutes === 60 ? hours + 1 : hours;
+        const newMinutes = roundedMinutes === 60 ? 0 : roundedMinutes;
+
+        return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+    };
+
+    const processAndSetYearlyStats = (shifts: any[]) => {
+        const monthlyData: { [key: string]: MonthlyStat } = {};
+
+        shifts.forEach(shift => {
+            const month = shift.date.substring(0, 7);
+            const duration = calculateDuration(shift.start_time, shift.end_time);
+
+            if (!monthlyData[month]) {
+                monthlyData[month] = {
+                    month: format(new Date(shift.date + 'T00:00:00'), 'MMM yyyy'),
+                    earnings: 0,
+                    hours: 0,
+                    shifts: 0,
+                    averagePerHour: 0,
+                };
+            }
+
+            monthlyData[month].earnings += shift.earnings;
+            monthlyData[month].hours += duration;
+            monthlyData[month].shifts += 1;
+        });
+
+        const monthlyStats = Object.values(monthlyData).map(stat => ({
+            ...stat,
+            averagePerHour: stat.hours > 0 ? stat.earnings / stat.hours : 0,
+        }));
+
+        const totalEarnings = monthlyStats.reduce((sum, stat) => sum + stat.earnings, 0);
+        const totalHours = monthlyStats.reduce((sum, stat) => sum + stat.hours, 0);
+        const totalShifts = monthlyStats.reduce((sum, stat) => sum + stat.shifts, 0);
+        const averagePerShift = totalShifts > 0 ? totalEarnings / totalShifts : 0;
+        const averagePerHour = totalHours > 0 ? totalEarnings / totalHours : 0;
+
+        const bestMonth = monthlyStats.length > 0
+            ? monthlyStats.reduce((best, current) =>
+                current.earnings > best.earnings ? current : best
+            )
+            : null;
+
+        setYearlyStats({
+            totalEarnings,
+            totalHours,
+            totalShifts,
+            averagePerShift,
+            averagePerHour,
+            monthlyStats: monthlyStats.sort((a, b) => {
+                const [aMonth, aYear] = a.month.split(' ');
+                const [bMonth, bYear] = b.month.split(' ');
+                if (aYear !== bYear) return bYear.localeCompare(aYear);
+                return new Date(`01 ${bMonth} ${bYear}`).getTime() -
+                    new Date(`01 ${aMonth} ${aYear}`).getTime();
+            }),
+            bestMonth,
+        });
+    };
+
     const fetchYearlyStats = useCallback(async (year?: number) => {
+        if (!user?.id) return;
+
         try {
             setLoading(true);
-
-            if (!user?.id) throw new Error('Пользователь не авторизован');
 
             const targetYear = year || new Date().getFullYear();
             const startDate = `${targetYear}-01-01`;
             const endDate = `${targetYear}-12-31`;
 
-            const { shifts: allShifts } = await getAllShiftsOfflineAware(user.id);
-            const shifts = allShifts.filter(shift =>
-                shift.date >= startDate && shift.date <= endDate
-            );
+            const cachedAll = await getCachedShifts(user.id);
+            const cachedShifts = cachedAll.filter(shift => shift.date >= startDate && shift.date <= endDate);
+            processAndSetYearlyStats(cachedShifts);
+            setLoading(false);
 
-            const monthlyData: { [key: string]: MonthlyStat } = {};
+            try {
+                const { shifts: allShifts } = await withTimeout(getAllShiftsOfflineAware(user.id), 4000);
+                const serverShifts = allShifts.filter((shift: any) => shift.date >= startDate && shift.date <= endDate);
+                processAndSetYearlyStats(serverShifts);
+            } catch (e) {
+            }
 
-            shifts.forEach(shift => {
-                const month = shift.date.substring(0, 7);
-                const duration = calculateDuration(shift.start_time, shift.end_time);
-
-                if (!monthlyData[month]) {
-                    monthlyData[month] = {
-                        month: format(new Date(shift.date + 'T00:00:00'), 'MMM yyyy'),
-                        earnings: 0,
-                        hours: 0,
-                        shifts: 0,
-                        averagePerHour: 0,
-                    };
-                }
-
-                monthlyData[month].earnings += shift.earnings;
-                monthlyData[month].hours += duration;
-                monthlyData[month].shifts += 1;
-            });
-
-            const monthlyStats = Object.values(monthlyData).map(stat => ({
-                ...stat,
-                averagePerHour: stat.hours > 0 ? stat.earnings / stat.hours : 0,
-            }));
-
-            const totalEarnings = monthlyStats.reduce((sum, stat) => sum + stat.earnings, 0);
-            const totalHours = monthlyStats.reduce((sum, stat) => sum + stat.hours, 0);
-            const totalShifts = monthlyStats.reduce((sum, stat) => sum + stat.shifts, 0);
-            const averagePerShift = totalShifts > 0 ? totalEarnings / totalShifts : 0;
-            const averagePerHour = totalHours > 0 ? totalEarnings / totalHours : 0;
-
-            const bestMonth = monthlyStats.length > 0
-                ? monthlyStats.reduce((best, current) =>
-                    current.earnings > best.earnings ? current : best
-                )
-                : null;
-
-            setYearlyStats({
-                totalEarnings,
-                totalHours,
-                totalShifts,
-                averagePerShift,
-                averagePerHour,
-                monthlyStats: monthlyStats.sort((a, b) => {
-                    const [aMonth, aYear] = a.month.split(' ');
-                    const [bMonth, bYear] = b.month.split(' ');
-                    if (aYear !== bYear) return bYear.localeCompare(aYear);
-                    return new Date(`01 ${bMonth} ${bYear}`).getTime() -
-                        new Date(`01 ${aMonth} ${aYear}`).getTime();
-                }),
-                bestMonth,
-            });
         } catch (error) {
             console.error('Error fetching yearly stats:', error);
             setYearlyStats(null);
-        } finally {
             setLoading(false);
         }
     }, [user?.id]);
@@ -121,10 +161,8 @@ export function useStatistics() {
             const start = format(startOfMonth(date), 'yyyy-MM-dd');
             const end = format(endOfMonth(date), 'yyyy-MM-dd');
 
-            const { shifts: allShifts } = await getAllShiftsOfflineAware(user.id);
-            const shifts = allShifts.filter(shift =>
-                shift.date >= start && shift.date <= end
-            );
+            const allShifts = await getCachedShifts(user.id);
+            const shifts = allShifts.filter(shift => shift.date >= start && shift.date <= end);
 
             const earnings = shifts.reduce((sum, shift) => sum + shift.earnings, 0);
             const hours = shifts.reduce((sum, shift) =>
@@ -148,7 +186,7 @@ export function useStatistics() {
         try {
             if (!user?.id) throw new Error('Пользователь не авторизован');
 
-            const { shifts: allShifts } = await getAllShiftsOfflineAware(user.id);
+            const allShifts = await getCachedShifts(user.id);
             const shifts = allShifts.slice(0, 1000);
 
             if (shifts.length === 0) {
@@ -195,30 +233,6 @@ export function useStatistics() {
             throw error;
         }
     }, [user?.id]);
-
-    const calculateDuration = (startTime: string, endTime: string): number => {
-        const [startH, startM] = startTime.split(':').map(Number);
-        const [endH, endM] = endTime.split(':').map(Number);
-
-        let hours = endH - startH;
-        let minutes = endM - startM;
-
-        if (minutes < 0) {
-            hours -= 1;
-            minutes += 60;
-        }
-
-        return hours + (minutes / 60);
-    };
-
-    const roundToNearest15 = (time: string): string => {
-        const [hours, minutes] = time.split(':').map(Number);
-        const roundedMinutes = Math.round(minutes / 15) * 15;
-        const newHours = roundedMinutes === 60 ? hours + 1 : hours;
-        const newMinutes = roundedMinutes === 60 ? 0 : roundedMinutes;
-
-        return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
-    };
 
     return {
         loading,
