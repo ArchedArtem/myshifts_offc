@@ -40,32 +40,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         let isMounted = true;
+        let authResolved = false;
 
         const initAuthFast = async () => {
+            const safetyTimeout = setTimeout(() => {
+                if (isMounted && loading) {
+                    setLoading(false);
+                    authResolved = true;
+                    console.log("Таймаут инициализации: Принудительная разблокировка UI");
+                }
+            }, 1500);
+
             try {
                 const keys = await AsyncStorage.getAllKeys();
-                const authKey = keys.find(k => k.includes('supabase') && k.includes('auth-token'));
+                const authKey = keys.find(k => k.includes('auth-token') || k.includes('supabase'));
+
                 if (authKey) {
                     const rawData = await AsyncStorage.getItem(authKey);
                     if (rawData) {
-                        const sessionData = JSON.parse(rawData);
-                        if (sessionData?.user) {
+                        const parsedData = JSON.parse(rawData);
+                        const userData = parsedData?.user ?? parsedData?.currentSession?.user;
+                        const sessionData = parsedData?.session ?? parsedData?.currentSession ?? parsedData;
+
+                        if (userData) {
                             setSession(sessionData);
-                            setUser(sessionData.user);
-                            setLoading(false);
+                            setUser(userData);
+                            setLoading(false); // МГНОВЕННЫЙ ВХОД (0 задержек)
+                            authResolved = true;
+                            clearTimeout(safetyTimeout);
                         }
                     }
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.warn("Fast auth init error", e);
+            }
 
             supabase.auth.getSession().then(({ data: { session } }) => {
                 if (!isMounted) return;
                 setSession(session);
                 setUser(session?.user ?? null);
-                setLoading(false);
+
+                if (!authResolved) {
+                    setLoading(false);
+                    authResolved = true;
+                    clearTimeout(safetyTimeout);
+                }
 
                 if (session?.user) {
                     ensureProfile(session.user).catch(() => {});
+                }
+            }).catch(() => {
+                if (isMounted && !authResolved) {
+                    setLoading(false);
+                    authResolved = true;
+                    clearTimeout(safetyTimeout);
                 }
             });
         };
