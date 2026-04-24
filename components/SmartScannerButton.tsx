@@ -1,8 +1,8 @@
-import React, {useState} from 'react';
+import React, {useState, useMemo} from 'react';
 import {TouchableOpacity, Text, StyleSheet, View, Modal, ScrollView, Alert, ActivityIndicator, TextInput} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import {Camera, Check, X, Sparkles, Clock, AlertTriangle, Image as ImageIcon} from 'lucide-react-native';
+import {Camera, Check, X, Sparkles, Clock, AlertTriangle, Image as ImageIcon, Trash2} from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/Colors';
 import {scanScheduleImage} from '@/services/aiScanner';
@@ -13,7 +13,10 @@ import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/services/supabase/client';
 
 export default function SmartScannerButton() {
-    useTheme();
+    const { theme } = useTheme();
+
+    const styles = useMemo(() => createStyles(), [theme]);
+
     const [isScanning, setIsScanning] = useState(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [detectedShifts, setDetectedShifts] = useState<any[] | null>(null);
@@ -44,6 +47,17 @@ export default function SmartScannerButton() {
             const updated = [...prev];
             updated[index] = { ...updated[index], [field]: value };
             return updated;
+        });
+    };
+
+    // НОВАЯ ФУНКЦИЯ: Удаление смены из списка
+    const removeDetectedShift = (indexToRemove: number) => {
+        try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch(e){}
+        setDetectedShifts((prev) => {
+            if (!prev) return prev;
+            const updated = prev.filter((_, index) => index !== indexToRemove);
+            // Если удалили последнюю смену — закрываем модалку
+            return updated.length > 0 ? updated : null;
         });
     };
 
@@ -262,15 +276,26 @@ export default function SmartScannerButton() {
                         <ScrollView style={styles.shiftsList} showsVerticalScrollIndicator={false}>
                             {detectedShifts?.map((shift, index) => (
                                 <View key={index} style={styles.shiftItem}>
+
+                                    {/* Измененная шапка карточки с кнопкой удаления */}
                                     <View style={styles.shiftDateRow}>
-                                        <Text style={styles.shiftDate}>{formatScanDate(shift.date)}</Text>
-                                        <TextInput
-                                            style={styles.shiftLabelInput}
-                                            value={shift.title}
-                                            onChangeText={(text) => updateShiftField(index, 'title', text)}
-                                            placeholder="Название"
-                                            placeholderTextColor={Colors.gray}
-                                        />
+                                        <View style={styles.shiftDateLeft}>
+                                            <Text style={styles.shiftDate}>{formatScanDate(shift.date)}</Text>
+                                            <TextInput
+                                                style={styles.shiftLabelInput}
+                                                value={shift.title}
+                                                onChangeText={(text) => updateShiftField(index, 'title', text)}
+                                                placeholder="Название"
+                                                placeholderTextColor={Colors.gray}
+                                            />
+                                        </View>
+                                        <TouchableOpacity
+                                            style={styles.removeShiftBtn}
+                                            onPress={() => removeDetectedShift(index)}
+                                            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+                                        >
+                                            <Trash2 size={16} color={Colors.error} />
+                                        </TouchableOpacity>
                                     </View>
 
                                     <View style={styles.shiftTimeRow}>
@@ -325,7 +350,7 @@ export default function SmartScannerButton() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = () => StyleSheet.create({
     shiftLabelInput: {
         color: Colors.primary,
         fontSize: 13,
@@ -369,7 +394,7 @@ const styles = StyleSheet.create({
         paddingVertical: 2,
         borderRadius: 6,
         textAlign: 'center',
-        minWidth: 35,
+        width: 45,
     },
     button: {
         flexDirection: 'row',
@@ -390,7 +415,7 @@ const styles = StyleSheet.create({
     buttonError: {backgroundColor: Colors.error, shadowColor: Colors.error},
     buttonText: {color: Colors.onPrimary, fontSize: 16, fontWeight: '700'},
 
-    modalOverlay: {flex: 1, justifyContent: 'flex-end'},
+    modalOverlay: {flex: 1, justifyContent: 'flex-end',},
 
     modalOverlayMaintenance: {
         flex: 1,
@@ -421,8 +446,19 @@ const styles = StyleSheet.create({
         borderLeftWidth: 4,
         borderLeftColor: Colors.primary,
     },
+
     shiftDateRow: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8},
+    shiftDateLeft: {flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1},
+
     shiftDate: {fontWeight: '700', fontSize: 16, color: Colors.darkGray},
+
+    removeShiftBtn: {
+        padding: 6,
+        backgroundColor: Colors.lightError,
+        borderRadius: 8,
+        marginLeft: 8,
+    },
+
     shiftLabel: {
         color: Colors.primary,
         fontSize: 13,
@@ -433,7 +469,12 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         overflow: 'hidden',
     },
-    shiftTimeRow: {flexDirection: 'row', alignItems: 'center', gap: 6},
+    shiftTimeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        flexWrap: 'wrap'
+    },
     shiftTime: {color: Colors.gray, fontSize: 14, fontWeight: '500'},
     shiftBreak: {color: Colors.gray, fontSize: 14, fontWeight: '500'},
     modalActions: {flexDirection: 'row', gap: 12},
@@ -460,7 +501,6 @@ const styles = StyleSheet.create({
 
     modalOverlayIntro: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
         justifyContent: 'center',
         padding: 20,
     },
