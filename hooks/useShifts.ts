@@ -32,7 +32,7 @@ interface UseShiftsReturn {
     loading: boolean;
     refreshing: boolean;
     error: string | null;
-    fetchShifts: (date?: Date) => Promise<void>;
+    fetchShifts: (date?: Date, isRefresh?: boolean) => Promise<void>;
     addShift: (shiftData: Omit<Shift, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<Shift | null>;
     updateShift: (id: string, shiftData: Partial<Shift>) => Promise<boolean>;
     deleteShift: (id: string) => Promise<boolean>;
@@ -48,16 +48,16 @@ export function useShifts(providedUserId?: string) {
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchShifts = useCallback(async (date?: Date) => {
-        try {
-            if (shifts.length === 0) setLoading(true);
-            setError(null);
+    const fetchShifts = useCallback(async (date?: Date, isRefresh: boolean = false) => {
+        const resolvedUserId = providedUserId || user?.id;
+        if (!resolvedUserId) {
+            setLoading(false);
+            return;
+        }
 
-            const resolvedUserId = providedUserId || user?.id;
-            if (!resolvedUserId) {
-                setLoading(false);
-                return;
-            }
+        try {
+            if (!isRefresh) setLoading(true);
+            setError(null);
 
             const targetDate = date || new Date();
             const start = format(startOfMonth(targetDate), 'yyyy-MM-dd');
@@ -69,21 +69,26 @@ export function useShifts(providedUserId?: string) {
             setShifts(localRange as Shift[]);
             setLoading(false);
 
-            try {
-                const payload = await withTimeout(
-                    getShiftsWithOffline({ userId: resolvedUserId, start, end }),
-                    4000
-                );
-                setShifts(payload.shifts as Shift[]);
-            } catch (err: any) {
+            const networkPromise = withTimeout(
+                getShiftsWithOffline({ userId: resolvedUserId, start, end }),
+                3500
+            )
+                .then(payload => {
+                    setShifts(payload.shifts as Shift[]);
+                })
+                .catch(() => {
+                });
+
+            if (isRefresh) {
+                await networkPromise;
             }
 
         } catch (err: any) {
             console.error('Error in fetchShifts:', err);
-        } finally {
+            setError(err.message);
             setLoading(false);
         }
-    }, [providedUserId, user?.id, shifts.length]);
+    }, [providedUserId, user?.id]);
 
     const addShift = useCallback(async (
         shiftData: Omit<Shift, 'id' | 'user_id' | 'created_at' | 'updated_at'>
@@ -209,7 +214,7 @@ export function useShifts(providedUserId?: string) {
     const refreshShifts = useCallback(async () => {
         try {
             setRefreshing(true);
-            await fetchShifts();
+            await fetchShifts(undefined, true); // Передаем true, чтобы дождаться ответа сети
         } catch (err: any) {
             setError(err.message);
         } finally {

@@ -58,13 +58,13 @@ const sanitizeShiftPayloadForServer = (payload: Record<string, unknown>) => {
 const isNetworkError = (error: unknown): boolean => {
   const message = String((error as { message?: string })?.message || '').toLowerCase();
   return (
-    message.includes('network request failed') ||
-    message.includes('fetch failed') ||
-    message.includes('failed to fetch') ||
-    message.includes('network error') ||
-    message.includes('offline') ||
-    message.includes('connection') ||
-    message.includes('timed out')
+      message.includes('network request failed') ||
+      message.includes('fetch failed') ||
+      message.includes('failed to fetch') ||
+      message.includes('network error') ||
+      message.includes('offline') ||
+      message.includes('connection') ||
+      message.includes('timed out')
   );
 };
 
@@ -95,9 +95,9 @@ const normalizeCachedShift = (shift: ShiftBase): ShiftBase => {
 };
 
 const sortShifts = (rows: ShiftBase[]) =>
-  rows
-    .map(normalizeCachedShift)
-    .sort((a, b) => `${b.date} ${b.start_time}`.localeCompare(`${a.date} ${a.start_time}`));
+    rows
+        .map(normalizeCachedShift)
+        .sort((a, b) => `${b.date} ${b.start_time}`.localeCompare(`${a.date} ${a.start_time}`));
 
 const loadAllCachedShifts = async (): Promise<Record<string, ShiftBase[]>> => {
   const raw = await AsyncStorage.getItem(OFFLINE_SHIFTS_KEY);
@@ -154,52 +154,52 @@ const upsertInCache = (rows: ShiftBase[], next: ShiftBase): ShiftBase[] => {
 };
 
 const patchInCache = (rows: ShiftBase[], id: string, patch: Partial<ShiftBase>): ShiftBase[] =>
-  sortShifts(
-    rows.map((item) =>
-      item.id === id
-        ? normalizeCachedShift({
-            ...item,
-            ...patch,
-          } as ShiftBase)
-        : item
-    )
-  );
+    sortShifts(
+        rows.map((item) =>
+            item.id === id
+                ? normalizeCachedShift({
+                  ...item,
+                  ...patch,
+                } as ShiftBase)
+                : item
+        )
+    );
 
 const markShiftPending = (rows: ShiftBase[], id: string, patch?: Partial<ShiftBase>) =>
-  patchInCache(rows, id, {
-    ...patch,
-    sync_state: 'pending',
-    sync_error: null,
-    is_pending: true,
-  });
+    patchInCache(rows, id, {
+      ...patch,
+      sync_state: 'pending',
+      sync_error: null,
+      is_pending: true,
+    });
 
 const markShiftSynced = (rows: ShiftBase[], id: string, patch?: Partial<ShiftBase>) =>
-  patchInCache(rows, id, {
-    ...patch,
-    sync_state: 'synced',
-    sync_error: null,
-    is_pending: false,
-  });
+    patchInCache(rows, id, {
+      ...patch,
+      sync_state: 'synced',
+      sync_error: null,
+      is_pending: false,
+    });
 
 const markShiftError = (rows: ShiftBase[], id: string, message: string) =>
-  patchInCache(rows, id, {
-    sync_state: 'error',
-    sync_error: message,
-    is_pending: true,
-  });
+    patchInCache(rows, id, {
+      sync_state: 'error',
+      sync_error: message,
+      is_pending: true,
+    });
 
 const mergeServerRowsWithLocalRows = (serverRows: ShiftBase[], localRows: ShiftBase[]) => {
   const merged = new Map<string, ShiftBase>();
 
   serverRows.forEach((row) => {
     merged.set(
-      row.id,
-      normalizeCachedShift({
-        ...row,
-        sync_state: 'synced',
-        sync_error: null,
-        is_pending: false,
-      })
+        row.id,
+        normalizeCachedShift({
+          ...row,
+          sync_state: 'synced',
+          sync_error: null,
+          is_pending: false,
+        })
     );
   });
 
@@ -255,9 +255,9 @@ const enqueueShiftOperation = async (userId: string, op: QueueOp): Promise<{ dro
   }
 
   const nextOwnQueue =
-    op.type === 'delete'
-      ? [...withoutSameShift, op]
-      : [...withoutSameShift, op];
+      op.type === 'delete'
+          ? [...withoutSameShift, op]
+          : [...withoutSameShift, op];
 
   await saveQueue([...nextOwnQueue, ...otherQueue]);
   return { dropped: false };
@@ -290,11 +290,11 @@ export const refreshUserShiftsCache = async (userId: string): Promise<ShiftBase[
   if (!userId) return [];
 
   const { data, error } = await supabase
-    .from('shifts')
-    .select('*')
-    .eq('user_id', userId)
-    .order('date', { ascending: false })
-    .order('start_time', { ascending: true });
+      .from('shifts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+      .order('start_time', { ascending: true });
 
   if (error) {
     throw error;
@@ -461,22 +461,15 @@ export const getShiftsWithOffline = async (params: {
   const cachedAll = await getUserShifts(params.userId);
   const cachedRange = cachedAll.filter((row) => row.date >= params.start && row.date <= params.end);
 
-  let syncResult: PendingShiftSyncResult | null = null;
-  try {
-    syncResult = await syncPendingShiftOps(params.userId);
-  } catch {
-    syncResult = null;
-  }
-
   try {
     const { data, error } = await supabase
-      .from('shifts')
-      .select('*')
-      .eq('user_id', params.userId)
-      .gte('date', params.start)
-      .lte('date', params.end)
-      .order('date', { ascending: false })
-      .order('start_time', { ascending: true });
+        .from('shifts')
+        .select('*')
+        .eq('user_id', params.userId)
+        .gte('date', params.start)
+        .lte('date', params.end)
+        .order('date', { ascending: false })
+        .order('start_time', { ascending: true });
 
     if (error) throw error;
 
@@ -489,13 +482,8 @@ export const getShiftsWithOffline = async (params: {
     const pendingCount = await getPendingOpsCount(params.userId);
     setShiftSyncState({
       pendingCount,
-      status:
-        syncResult && !syncResult.ok && !syncResult.networkUnavailable
-          ? 'error'
-          : pendingCount > 0
-            ? 'unsynced'
-            : 'synced',
-      lastError: syncResult && !syncResult.ok && !syncResult.networkUnavailable ? syncResult.errorMessage : null,
+      status: pendingCount > 0 ? 'unsynced' : 'synced',
+      lastError: null,
       lastSyncedAt: new Date().toISOString(),
     });
 
@@ -529,24 +517,14 @@ export const getAllShiftsOfflineAware = async (userId: string): Promise<{ shifts
   const cached = await getUserShifts(userId);
 
   try {
-    const syncResult = await syncPendingShiftOps(userId);
     const refreshed = await refreshUserShiftsCache(userId);
     const pendingCount = await getPendingOpsCount(userId);
 
     setShiftSyncState({
       pendingCount,
-      status:
-        syncResult.ok
-          ? pendingCount > 0
-            ? 'unsynced'
-            : 'synced'
-          : syncResult.networkUnavailable
-            ? pendingCount > 0
-              ? 'unsynced'
-              : 'synced'
-            : 'error',
-      lastError: syncResult.ok || syncResult.networkUnavailable ? null : syncResult.errorMessage,
-      lastSyncedAt: syncResult.ok ? new Date().toISOString() : getShiftSyncState().lastSyncedAt,
+      status: pendingCount > 0 ? 'unsynced' : 'synced',
+      lastError: null,
+      lastSyncedAt: new Date().toISOString(),
     });
 
     return {
@@ -565,14 +543,14 @@ export const getAllShiftsOfflineAware = async (userId: string): Promise<{ shifts
 };
 
 export const getUpcomingShiftOfflineAware = async (
-  userId: string,
-  fromDate: string = new Date().toISOString().slice(0, 10)
+    userId: string,
+    fromDate: string = new Date().toISOString().slice(0, 10)
 ): Promise<{ shift: ShiftBase | null; fromCache: boolean; pendingCount: number }> => {
   const payload = await getAllShiftsOfflineAware(userId);
   const nextShift =
-    payload.shifts
-      .filter((shift) => shift.date >= fromDate)
-      .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`))[0] || null;
+      payload.shifts
+          .filter((shift) => shift.date >= fromDate)
+          .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`))[0] || null;
 
   return {
     shift: nextShift,
@@ -601,10 +579,10 @@ export const saveShiftOfflineAware = async (params: {
   if (params.isEdit && params.shiftId) {
     try {
       const { error } = await supabase
-        .from('shifts')
-        .update(sanitizeShiftPayloadForServer(params.shiftData as Record<string, unknown>))
-        .eq('id', params.shiftId)
-        .eq('user_id', params.userId);
+          .from('shifts')
+          .update(sanitizeShiftPayloadForServer(params.shiftData as Record<string, unknown>))
+          .eq('id', params.shiftId)
+          .eq('user_id', params.userId);
 
       if (error) throw error;
 
@@ -646,21 +624,21 @@ export const saveShiftOfflineAware = async (params: {
 
   try {
     const { data, error } = await supabase
-      .from('shifts')
-      .insert([sanitizeShiftPayloadForServer(params.shiftData as Record<string, unknown>)])
-      .select('*')
-      .single();
+        .from('shifts')
+        .insert([sanitizeShiftPayloadForServer(params.shiftData as Record<string, unknown>)])
+        .select('*')
+        .single();
 
     if (error) throw error;
 
     await setUserShifts(
-      params.userId,
-      upsertInCache(cache, {
-        ...(data as ShiftBase),
-        sync_state: 'synced',
-        sync_error: null,
-        is_pending: false,
-      })
+        params.userId,
+        upsertInCache(cache, {
+          ...(data as ShiftBase),
+          sync_state: 'synced',
+          sync_error: null,
+          is_pending: false,
+        })
     );
     await updateSyncStateFromQueue(params.userId, { lastError: null });
     return { queued: false, shiftId: String(data.id) };
@@ -695,10 +673,10 @@ export const deleteShiftOfflineAware = async (params: {
 
   try {
     const { error } = await supabase
-      .from('shifts')
-      .delete()
-      .eq('id', params.shiftId)
-      .eq('user_id', params.userId);
+        .from('shifts')
+        .delete()
+        .eq('id', params.shiftId)
+        .eq('user_id', params.userId);
 
     if (error) throw error;
     await setUserShifts(params.userId, cache.filter((row) => row.id !== params.shiftId));

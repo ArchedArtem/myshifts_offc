@@ -31,7 +31,7 @@ interface YearlyStats {
 interface UseStatisticsReturn {
     loading: boolean;
     yearlyStats: YearlyStats | null;
-    fetchYearlyStats: (year?: number) => Promise<void>;
+    fetchYearlyStats: (year?: number, isRefresh?: boolean) => Promise<void>;
     getMonthStats: (date: Date) => Promise<MonthlyStat>;
     getShiftStats: () => Promise<{
         averageDuration: number;
@@ -42,7 +42,7 @@ interface UseStatisticsReturn {
 
 export function useStatistics() {
     const { user } = useAuth();
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [yearlyStats, setYearlyStats] = useState<YearlyStats | null>(null);
 
     const calculateDuration = (startTime: string, endTime: string): number => {
@@ -125,11 +125,11 @@ export function useStatistics() {
         });
     };
 
-    const fetchYearlyStats = useCallback(async (year?: number) => {
+    const fetchYearlyStats = useCallback(async (year?: number, isRefresh: boolean = false) => {
         if (!user?.id) return;
 
         try {
-            setLoading(true);
+            if (!isRefresh) setLoading(true);
 
             const targetYear = year || new Date().getFullYear();
             const startDate = `${targetYear}-01-01`;
@@ -140,11 +140,15 @@ export function useStatistics() {
             processAndSetYearlyStats(cachedShifts);
             setLoading(false);
 
-            try {
-                const { shifts: allShifts } = await withTimeout(getAllShiftsOfflineAware(user.id), 4000);
-                const serverShifts = allShifts.filter((shift: any) => shift.date >= startDate && shift.date <= endDate);
-                processAndSetYearlyStats(serverShifts);
-            } catch (e) {
+            const networkPromise = withTimeout(getAllShiftsOfflineAware(user.id), 3500)
+                .then(({ shifts }) => {
+                    const serverShifts = shifts.filter((shift: any) => shift.date >= startDate && shift.date <= endDate);
+                    processAndSetYearlyStats(serverShifts);
+                })
+                .catch(() => {});
+
+            if (isRefresh) {
+                await networkPromise;
             }
 
         } catch (error) {
