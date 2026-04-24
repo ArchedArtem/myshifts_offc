@@ -5,13 +5,6 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { deleteShiftOfflineAware, getShiftsWithOffline, saveShiftOfflineAware, getCachedShifts } from '@/services/offlineShifts';
 import { useAuth } from '@/hooks/useAuth';
 
-const withTimeout = (promise: Promise<any>, ms: number) => {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
-    ]);
-};
-
 interface Shift {
     id: string;
     user_id: string;
@@ -25,20 +18,6 @@ interface Shift {
     break?: number;
     created_at: string;
     updated_at: string;
-}
-
-interface UseShiftsReturn {
-    shifts: Shift[];
-    loading: boolean;
-    refreshing: boolean;
-    error: string | null;
-    fetchShifts: (date?: Date, isRefresh?: boolean) => Promise<void>;
-    addShift: (shiftData: Omit<Shift, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<Shift | null>;
-    updateShift: (id: string, shiftData: Partial<Shift>) => Promise<boolean>;
-    deleteShift: (id: string) => Promise<boolean>;
-    getShiftsByDate: (date: string) => Shift[];
-    getMonthlySummary: (date: Date) => { totalEarnings: number; totalHours: number; shiftCount: number };
-    refreshShifts: () => Promise<void>;
 }
 
 export function useShifts(providedUserId?: string) {
@@ -56,7 +35,7 @@ export function useShifts(providedUserId?: string) {
         }
 
         try {
-            if (!isRefresh) setLoading(true);
+            if (!isRefresh && shifts.length === 0) setLoading(true);
             setError(null);
 
             const targetDate = date || new Date();
@@ -65,64 +44,29 @@ export function useShifts(providedUserId?: string) {
 
             const localCache = await getCachedShifts(resolvedUserId);
             const localRange = localCache.filter(s => s.date >= start && s.date <= end);
-
             setShifts(localRange as Shift[]);
             setLoading(false);
 
-            const networkPromise = withTimeout(
-                getShiftsWithOffline({ userId: resolvedUserId, start, end }),
-                3500
-            )
-                .then(payload => {
-                    setShifts(payload.shifts as Shift[]);
-                })
-                .catch(() => {
-                });
+            const bgPromise = getShiftsWithOffline({ userId: resolvedUserId, start, end })
+                .then(payload => setShifts(payload.shifts as Shift[]))
+                .catch(() => {});
 
-            if (isRefresh) {
-                await networkPromise;
-            }
+            if (isRefresh) await bgPromise;
 
         } catch (err: any) {
-            console.error('Error in fetchShifts:', err);
             setError(err.message);
             setLoading(false);
         }
-    }, [providedUserId, user?.id]);
+    }, [providedUserId, user?.id, shifts.length]);
 
-    const addShift = useCallback(async (
-        shiftData: Omit<Shift, 'id' | 'user_id' | 'created_at' | 'updated_at'>
-    ): Promise<Shift | null> => {
+    const addShift = useCallback(async (shiftData: Omit<Shift, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Shift | null> => {
         try {
             const resolvedUserId = providedUserId || user?.id;
             if (!resolvedUserId) throw new Error('Пользователь не авторизован');
-
-            const earnings = calculateEarnings(
-                shiftData.start_time,
-                shiftData.end_time,
-                shiftData.hourly_rate,
-                shiftData.extra_payment
-            );
-
-            const newShift = {
-                ...shiftData,
-                user_id: resolvedUserId,
-                earnings,
-            };
-
-            const result = await saveShiftOfflineAware({
-                userId: resolvedUserId,
-                isEdit: false,
-                shiftData: newShift,
-            });
-
-            const cached = {
-                id: result.shiftId,
-                ...newShift,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-            } as Shift;
-
+            const earnings = calculateEarnings(shiftData.start_time, shiftData.end_time, shiftData.hourly_rate, shiftData.extra_payment);
+            const newShift = { ...shiftData, user_id: resolvedUserId, earnings };
+            const result = await saveShiftOfflineAware({ userId: resolvedUserId, isEdit: false, shiftData: newShift });
+            const cached = { id: result.shiftId, ...newShift, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Shift;
             setShifts(prev => [cached, ...prev]);
             return cached;
         } catch (err: any) {
@@ -131,10 +75,7 @@ export function useShifts(providedUserId?: string) {
         }
     }, [providedUserId, user?.id]);
 
-    const updateShift = useCallback(async (
-        id: string,
-        shiftData: Partial<Shift>
-    ): Promise<boolean> => {
+    const updateShift = useCallback(async (id: string, shiftData: Partial<Shift>): Promise<boolean> => {
         try {
             const resolvedUserId = providedUserId || user?.id;
             if (!resolvedUserId) throw new Error('Пользователь не авторизован');
@@ -142,26 +83,14 @@ export function useShifts(providedUserId?: string) {
             if (shiftData.start_time || shiftData.end_time || shiftData.hourly_rate || shiftData.extra_payment) {
                 const existingShift = shifts.find(s => s.id === id);
                 if (existingShift) {
-                    const earnings = calculateEarnings(
-                        shiftData.start_time || existingShift.start_time,
-                        shiftData.end_time || existingShift.end_time,
-                        shiftData.hourly_rate || existingShift.hourly_rate,
-                        shiftData.extra_payment ?? existingShift.extra_payment
+                    shiftData.earnings = calculateEarnings(
+                        shiftData.start_time || existingShift.start_time, shiftData.end_time || existingShift.end_time,
+                        shiftData.hourly_rate || existingShift.hourly_rate, shiftData.extra_payment ?? existingShift.extra_payment
                     );
-                    shiftData.earnings = earnings;
                 }
             }
-
-            await saveShiftOfflineAware({
-                userId: resolvedUserId,
-                isEdit: true,
-                shiftId: id,
-                shiftData: { ...shiftData, user_id: resolvedUserId } as any,
-            });
-
-            setShifts(prev => prev.map(shift =>
-                shift.id === id ? { ...shift, ...shiftData } : shift
-            ));
+            await saveShiftOfflineAware({ userId: resolvedUserId, isEdit: true, shiftId: id, shiftData: { ...shiftData, user_id: resolvedUserId } as any });
+            setShifts(prev => prev.map(shift => shift.id === id ? { ...shift, ...shiftData } : shift));
             return true;
         } catch (err: any) {
             Alert.alert('Ошибка', err.message);
@@ -173,9 +102,7 @@ export function useShifts(providedUserId?: string) {
         try {
             const resolvedUserId = providedUserId || user?.id;
             if (!resolvedUserId) throw new Error('Пользователь не авторизован');
-
             await deleteShiftOfflineAware({ userId: resolvedUserId, shiftId: id });
-
             setShifts(prev => prev.filter(shift => shift.id !== id));
             return true;
         } catch (err: any) {
@@ -184,37 +111,29 @@ export function useShifts(providedUserId?: string) {
         }
     }, [providedUserId, user?.id]);
 
-    const getShiftsByDate = useCallback((date: string): Shift[] => {
-        return shifts.filter(shift => shift.date === date);
-    }, [shifts]);
+    const getShiftsByDate = useCallback((date: string): Shift[] => shifts.filter(shift => shift.date === date), [shifts]);
 
     const getMonthlySummary = useCallback((date: Date) => {
         const monthShifts = shifts.filter(shift => {
             const shiftDate = new Date(shift.date);
-            return shiftDate.getMonth() === date.getMonth() &&
-                shiftDate.getFullYear() === date.getFullYear();
+            return shiftDate.getMonth() === date.getMonth() && shiftDate.getFullYear() === date.getFullYear();
         });
-
         const totalEarnings = monthShifts.reduce((sum, shift) => sum + shift.earnings, 0);
         const totalHours = monthShifts.reduce((sum, shift) => {
             const [startH, startM] = shift.start_time.split(':').map(Number);
             const [endH, endM] = shift.end_time.split(':').map(Number);
             let hours = endH - startH;
             let minutes = endM - startM;
-            if (minutes < 0) {
-                hours -= 1;
-                minutes += 60;
-            }
+            if (minutes < 0) { hours -= 1; minutes += 60; }
             return sum + hours + (minutes / 60);
         }, 0);
-
         return { totalEarnings, totalHours, shiftCount: monthShifts.length };
     }, [shifts]);
 
     const refreshShifts = useCallback(async () => {
         try {
             setRefreshing(true);
-            await fetchShifts(undefined, true); // Передаем true, чтобы дождаться ответа сети
+            await fetchShifts(undefined, true);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -222,21 +141,7 @@ export function useShifts(providedUserId?: string) {
         }
     }, [fetchShifts]);
 
-    useEffect(() => {
-        fetchShifts();
-    }, [fetchShifts]);
+    useEffect(() => { fetchShifts(); }, [fetchShifts]);
 
-    return {
-        shifts,
-        loading,
-        refreshing,
-        error,
-        fetchShifts,
-        addShift,
-        updateShift,
-        deleteShift,
-        getShiftsByDate,
-        getMonthlySummary,
-        refreshShifts,
-    };
+    return { shifts, loading, refreshing, error, fetchShifts, addShift, updateShift, deleteShift, getShiftsByDate, getMonthlySummary, refreshShifts };
 }

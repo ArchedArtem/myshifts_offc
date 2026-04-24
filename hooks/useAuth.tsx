@@ -3,6 +3,7 @@ import { supabase, supabaseAnonKey, supabaseUrl } from '@/services/supabase/clie
 import { Session, User } from '@supabase/supabase-js';
 import { clearNextShiftWidgetState, syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import { clearCachedProfile, saveCachedProfile } from '@/services/profileCache';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthContextType {
     session: Session | null;
@@ -27,20 +28,9 @@ async function ensureProfile(user: User): Promise<void> {
 
     const { error } = await supabase
         .from('profiles')
-        .upsert(
-            {
-                id: user.id,
-                email,
-                updated_at: new Date().toISOString(),
-            },
-            {
-                onConflict: 'id',
-            }
-        );
+        .upsert({ id: user.id, email, updated_at: new Date().toISOString() }, { onConflict: 'id' });
 
-    if (error) {
-        console.error('Ensure profile error:', error);
-    }
+    if (error) console.error('Ensure profile error:', error);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -49,29 +39,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            setLoading(false);
+        let isMounted = true;
 
-            if (session?.user) {
-                ensureProfile(session.user).catch(console.error);
-            }
-        });
+        const initAuthFast = async () => {
+            try {
+                const keys = await AsyncStorage.getAllKeys();
+                const authKey = keys.find(k => k.includes('supabase') && k.includes('auth-token'));
+                if (authKey) {
+                    const rawData = await AsyncStorage.getItem(authKey);
+                    if (rawData) {
+                        const sessionData = JSON.parse(rawData);
+                        if (sessionData?.user) {
+                            setSession(sessionData);
+                            setUser(sessionData.user);
+                            setLoading(false);
+                        }
+                    }
+                }
+            } catch (e) { }
+
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                if (!isMounted) return;
+                setSession(session);
+                setUser(session?.user ?? null);
+                setLoading(false);
+
+                if (session?.user) {
+                    ensureProfile(session.user).catch(() => {});
+                }
+            });
+        };
+
+        initAuthFast();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (_event, session) => {
                 setSession(session);
                 setUser(session?.user ?? null);
                 setLoading(false);
-
-                if (session?.user) {
-                    ensureProfile(session.user).catch(console.error);
-                }
+                if (session?.user) ensureProfile(session.user).catch(() => {});
             }
         );
 
-        return () => subscription.unsubscribe();
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
     }, []);
 
     useEffect(() => {
@@ -79,113 +92,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             syncNextShiftWidgetForUser(user.id);
             return;
         }
-
         clearNextShiftWidgetState();
     }, [user?.id]);
 
     const sendOTP = async (email: string): Promise<void> => {
-        const normalizedEmail = email.trim().toLowerCase();
-
         const { error } = await supabase.auth.signInWithOtp({
-            email: normalizedEmail,
-            options: {
-                shouldCreateUser: true,
-            },
+            email: email.trim().toLowerCase(),
+            options: { shouldCreateUser: true },
         });
-
-        if (error) {
-            throw new Error(error.message || 'Не удалось отправить код');
-        }
+        if (error) throw new Error(error.message || 'Не удалось отправить код');
     };
 
     const verifyOTP = async (email: string, token: string): Promise<void> => {
-        const normalizedEmail = email.trim().toLowerCase();
-
         const { data, error } = await supabase.auth.verifyOtp({
-            email: normalizedEmail,
-            token,
-            type: 'email',
+            email: email.trim().toLowerCase(), token, type: 'email',
         });
-
-        if (error) {
-            throw new Error(error.message || 'Неверный код или время истекло');
-        }
-
-        if (data.user) {
-            await ensureProfile(data.user);
-        }
+        if (error) throw new Error(error.message || 'Неверный код или время истекло');
+        if (data.user) await ensureProfile(data.user);
     };
 
     const signOut = async () => {
         try {
             const { error } = await supabase.auth.signOut();
-            const errorMessage = (error as any)?.message || '';
-            const isMissingSession = errorMessage.toLowerCase().includes('auth session missing');
-
-            if (error && !isMissingSession) throw error;
-
+            if (error && !error.message.toLowerCase().includes('auth session missing')) throw error;
             setSession(null);
             setUser(null);
             await clearCachedProfile(user?.id);
         } catch (error: any) {
-            console.error('Sign out error:', error);
             throw error;
         }
     };
 
     const deleteAccount = async () => {
-        if (!user) {
-            throw new Error('Пользователь не авторизован');
-        }
-
+        if (!user) throw new Error('Пользователь не авторизован');
         const tablesToClean = ['shifts', 'shift_templates'] as const;
-
         for (const table of tablesToClean) {
             const { error } = await supabase.from(table).delete().eq('user_id', user.id);
-            if (error) {
-                throw new Error(error.message || `Не удалось очистить ${table}`);
-            }
+            if (error) throw new Error(error.message);
         }
-
         const { error: profileError } = await supabase.from('profiles').delete().eq('id', user.id);
-        if (profileError) {
-            throw new Error(profileError.message || 'Не удалось удалить профиль');
-        }
+        if (profileError) throw new Error(profileError.message);
 
         const { data } = await supabase.auth.getSession();
-        const accessToken = data.session?.access_token;
-
-        if (accessToken) {
-            const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        if (data.session?.access_token) {
+            await fetch(`${supabaseUrl}/auth/v1/user`, {
                 method: 'DELETE',
-                headers: {
-                    apikey: supabaseAnonKey,
-                    Authorization: `Bearer ${accessToken}`,
-                },
+                headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${data.session.access_token}` },
             });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.warn('Auth user delete failed, continue with local cleanup:', errorText);
-            }
         }
-
         await signOut();
-        await clearCachedProfile(user.id);
-    };
-
-    const value: AuthContextType = {
-        session,
-        user,
-        loading,
-        sendOTP,
-        verifyOTP,
-        signOut,
-        deleteAccount,
     };
 
     return (
-        <AuthContext.Provider value={value}>
+        <AuthContext.Provider value={{ session, user, loading, sendOTP, verifyOTP, signOut, deleteAccount }}>
             {children}
         </AuthContext.Provider>
     );
@@ -193,8 +152,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
     const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
+    if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
     return context;
 }
