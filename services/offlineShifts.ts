@@ -167,15 +167,20 @@ const markShiftError = (rows: ShiftBase[], id: string, message: string) =>
 
 const mergeServerRowsWithLocalRows = (serverRows: ShiftBase[], localRows: ShiftBase[]) => {
   const merged = new Map<string, ShiftBase>();
+
   serverRows.forEach((row) => {
     merged.set(row.id, normalizeCachedShift({ ...row, sync_state: 'synced', sync_error: null, is_pending: false }));
   });
+
   localRows.forEach((row) => {
     const normalized = normalizeCachedShift(row);
-    if (normalized.sync_state !== 'synced' || !merged.has(normalized.id)) {
+
+    if (normalized.sync_state !== 'synced') {
       merged.set(normalized.id, normalized);
     }
+
   });
+
   return sortShifts([...merged.values()]);
 };
 
