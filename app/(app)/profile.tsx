@@ -194,6 +194,9 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.deleteAccountLink} onPress={handleDeleteAccount} disabled={loading}>
                 <Text style={styles.deleteAccountText}>{loading ? 'Удаление...' : 'Удалить аккаунт'}</Text>
             </TouchableOpacity>
+
+            {/* Метка версии приложения */}
+            <Text style={styles.versionText}>Версия приложения 2.4.0</Text>
         </ScrollView>
     );
 }
@@ -331,12 +334,22 @@ const createStyles = () => StyleSheet.create({
 
     deleteAccountLink: {
         alignSelf: 'center',
-        paddingVertical: 16,
+        paddingTop: 16,
+        paddingBottom: 4,
         paddingHorizontal: 20,
     },
     deleteAccountText: {
         fontSize: 14,
         color: Colors.gray,
         fontWeight: '600',
+    },
+    versionText: {
+        fontSize: 12,
+        color: Colors.gray,
+        fontWeight: '500',
+        textAlign: 'center',
+        opacity: 0.6,
+        marginTop: 6,
+        paddingBottom: 16,
     },
 });
