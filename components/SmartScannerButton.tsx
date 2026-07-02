@@ -50,13 +50,11 @@ export default function SmartScannerButton() {
         });
     };
 
-    // НОВАЯ ФУНКЦИЯ: Удаление смены из списка
     const removeDetectedShift = (indexToRemove: number) => {
         try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch(e){}
         setDetectedShifts((prev) => {
             if (!prev) return prev;
             const updated = prev.filter((_, index) => index !== indexToRemove);
-            // Если удалили последнюю смену — закрываем модалку
             return updated.length > 0 ? updated : null;
         });
     };
@@ -120,10 +118,28 @@ export default function SmartScannerButton() {
         }
     };
 
+    // Глубокая модификация процесса сканирования для теневого бана
     const processImage = async (uri: string) => {
         setIsScanning(true);
         setScanError(null);
         try {
+            // 1. Проверяем статус теневого бана в Supabase в реальном времени перед тратой токенов
+            if (user?.id) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('is_shadowbanned')
+                    .eq('id', user.id)
+                    .single();
+
+                if (profile?.is_shadowbanned) {
+                    const fakeDelay = Math.floor(Math.random() * 1500) + 2000;
+                    await new Promise((resolve) => setTimeout(resolve, fakeDelay));
+
+                    throw new Error('shadowban_triggered');
+                }
+            }
+
+            // 2. Если юзер чист — идет стандартный запрос к ИИ-сервису
             const shifts = await scanScheduleImage(uri);
             if (shifts.length === 0) {
                 throw new Error('empty_shifts');
@@ -134,7 +150,11 @@ export default function SmartScannerButton() {
             try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch (e) {}
 
             const msg = (error?.message || '').toLowerCase();
-            if (msg === 'empty_shifts') {
+
+            // Обработка триггера бана: подсовываем дефолтную ошибку распознавания
+            if (msg === 'shadowban_triggered') {
+                setScanError('Не удалось прочитать ❌');
+            } else if (msg === 'empty_shifts') {
                 setScanError('Смены не найдены 🧐');
             } else {
                 const isOverloaded =
@@ -276,8 +296,6 @@ export default function SmartScannerButton() {
                         <ScrollView style={styles.shiftsList} showsVerticalScrollIndicator={false}>
                             {detectedShifts?.map((shift, index) => (
                                 <View key={index} style={styles.shiftItem}>
-
-                                    {/* Измененная шапка карточки с кнопкой удаления */}
                                     <View style={styles.shiftDateRow}>
                                         <View style={styles.shiftDateLeft}>
                                             <Text style={styles.shiftDate}>{formatScanDate(shift.date)}</Text>
