@@ -19,7 +19,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { Ionicons } from '@expo/vector-icons';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
-import * as FileSystem from 'expo-file-system';
+// Переключаемся на legacy API, чтобы старые методы работы с файловой системой работали в SDK 54+
+import * as FileSystem from 'expo-file-system/legacy';
 
 type Period = 'month' | 'year' | 'all';
 type ExportFormat = 'pdf' | 'csv' | 'txt';
@@ -123,7 +124,6 @@ export default function ExportDataScreen() {
     return () => { isMounted = false; };
   }, [period, fetchShifts]);
 
-  // ШАБЛОН ДЛЯ PDF КРАСИВОЙ ТАБЛИЦЫ СМЕН
   const buildHtmlContent = (rows: ShiftRow[], stats: PeriodStats) => {
     const formattedDate = format(new Date(), 'dd.MM.yyyy HH:mm');
     const tableRowsHtml = rows.map((r, i) => `
@@ -238,7 +238,6 @@ export default function ExportDataScreen() {
     return '\ufeff' + headers + body;
   };
 
-  // МЕТОДЫ ЭКСПОРТА С КОРРЕКТНЫМИ WEB-ФОЛБЕКАМИ
   const handleTextExport = async () => {
     try {
       const prettyText = buildPrettyExportText(cachedRows);
@@ -299,7 +298,6 @@ export default function ExportDataScreen() {
           printWindow.document.write(htmlHtml);
           printWindow.document.close();
           printWindow.focus();
-          // Небольшой таймаут, чтобы стили и шрифты успели отрендериться перед открытием диалога печати
           setTimeout(() => {
             printWindow.print();
           }, 300);
@@ -311,6 +309,7 @@ export default function ExportDataScreen() {
       const docDirectory = (FileSystem as any).documentDirectory;
       const customName = `${docDirectory}MyShifts_Report_${format(new Date(), 'yyyyMMdd')}.pdf`;
 
+      // Благодаря легаси-импорту метод moveAsync отработает корректно без падений на девайсах
       await FileSystem.moveAsync({ from: uri, to: customName });
 
       if (await Sharing.isAvailableAsync()) {
