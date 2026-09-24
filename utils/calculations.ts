@@ -8,10 +8,13 @@ export const calculateEarnings = (
     endTime: string,
     hourlyRate: number,
     extraPayment: number = 0,
-    breakMinutes: number = 0
+    breakMinutes: number = 0,
+    isHoliday: boolean = false
 ): number => {
     const duration = calculateDuration(startTime, endTime, breakMinutes);
-    const baseEarnings = duration * hourlyRate;
+    // При праздничной смене ставка удваивается
+    const effectiveRate = isHoliday ? hourlyRate * 2 : hourlyRate;
+    const baseEarnings = duration * effectiveRate;
     return baseEarnings + extraPayment;
 };
 
@@ -86,7 +89,6 @@ export const calculateNetEarnings = (
     return earnings - tax;
 };
 
-
 export const NDFL_RATE = 13;
 
 export const applyNdfl = (earnings: number, includeNdfl: boolean): number => {
@@ -125,6 +127,7 @@ export const calculateWeeklyEarnings = (
         hourlyRate: number;
         extraPayment?: number;
         breakMinutes?: number;
+        isHoliday?: boolean;
     }>
 ): number => {
     return shifts.reduce((total, shift) => {
@@ -133,7 +136,8 @@ export const calculateWeeklyEarnings = (
             shift.endTime,
             shift.hourlyRate,
             shift.extraPayment || 0,
-            shift.breakMinutes || 0
+            shift.breakMinutes || 0,
+            shift.isHoliday || false
         );
         return total + earnings;
     }, 0);
@@ -164,7 +168,6 @@ export const isNightShift = (
     const startHour = parseInt(startTime.split(':')[0]);
     const endHour = parseInt(endTime.split(':')[0]);
 
-    // Если смена начинается или заканчивается в ночное время
     return startHour >= 22 || startHour < 6 || endHour >= 22 || endHour < 6;
 };
 
@@ -179,35 +182,30 @@ export const calculateNightHours = (
     const end = parse(endTime, 'HH:mm', new Date());
 
     let nightHours = 0;
-    let current = start;
 
-    // Если время окончания раньше времени начала (ночная смена через полночь)
     if (end < start) {
         const endOfDay = parse('23:59', 'HH:mm', new Date());
         const startOfDay = parse('00:00', 'HH:mm', new Date());
 
-        // Часы до полуночи
         let temp = start;
         while (temp <= endOfDay) {
             const hour = temp.getHours();
-            if (hour >= 22 || hour < 6) nightHours += 1/60; // +1 минута
-            temp = new Date(temp.getTime() + 60000); // +1 минута
+            if (hour >= 22 || hour < 6) nightHours += 1/60;
+            temp = new Date(temp.getTime() + 60000);
         }
 
-        // Часы после полуночи
         temp = startOfDay;
         while (temp <= end) {
             const hour = temp.getHours();
-            if (hour >= 22 || hour < 6) nightHours += 1/60; // +1 минута
-            temp = new Date(temp.getTime() + 60000); // +1 минута
+            if (hour >= 22 || hour < 6) nightHours += 1/60;
+            temp = new Date(temp.getTime() + 60000);
         }
     } else {
-        // Обычная смена
         let temp = start;
         while (temp <= end) {
             const hour = temp.getHours();
-            if (hour >= 22 || hour < 6) nightHours += 1/60; // +1 минута
-            temp = new Date(temp.getTime() + 60000); // +1 минута
+            if (hour >= 22 || hour < 6) nightHours += 1/60;
+            temp = new Date(temp.getTime() + 60000);
         }
     }
 
@@ -221,7 +219,7 @@ export const calculateNightBonus = (
     startTime: string,
     endTime: string,
     hourlyRate: number,
-    nightBonusRate: number = 1.35 // 35% доплата за ночные
+    nightBonusRate: number = 1.35
 ): number => {
     const nightHours = calculateNightHours(startTime, endTime);
     return nightHours * hourlyRate * (nightBonusRate - 1);

@@ -349,7 +349,7 @@ const createStyles = () => StyleSheet.create({
         fontWeight: '500',
         textAlign: 'center',
         opacity: 0.6,
-        marginTop: 10,
-        paddingBottom: 3,
+        marginTop: 20,
+        paddingBottom: 0,
     },
 });

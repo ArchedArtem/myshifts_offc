@@ -168,9 +168,18 @@ export default function CalendarScreen() {
 
     const markedDates = useMemo(() => {
         const marked: Record<string, any> = {};
+        // Берем текущий отображаемый год (например, "2026")
+        const currentYearStr = format(selectedDate, 'yyyy');
 
         holidayDateSet.forEach((holidayDate) => {
-            marked[holidayDate] = {
+            // Если дата без года ("05-09"), приводим ее к "2026-05-09"
+            // Если дата с годом ("2026-05-09"), оставляем как есть
+            let dateKey = holidayDate;
+            if (holidayDate.length === 5) { // формат MM-DD
+                dateKey = `${currentYearStr}-${holidayDate}`;
+            }
+
+            marked[dateKey] = {
                 customStyles: {
                     container: {
                         backgroundColor: Colors.lightPrimary,
@@ -216,7 +225,7 @@ export default function CalendarScreen() {
         };
 
         return marked;
-    }, [formattedDate, holidayDateSet, shifts]);
+    }, [formattedDate, holidayDateSet, shifts, selectedDate]); // <- Не забудьте добавить selectedDate в зависимости!
 
     const filteredShifts = shifts.filter((shift) => shift.date === formattedDate);
 

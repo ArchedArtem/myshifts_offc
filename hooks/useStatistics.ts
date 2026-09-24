@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { getAllShiftsOfflineAware, getCachedShifts } from '@/services/offlineShifts';
 import { useAuth } from '@/hooks/useAuth';
+import { loadHolidayDateSet, isHolidayDate } from '@/services/holidays';
 
 interface MonthlyStat {
     month: string;
@@ -26,13 +27,15 @@ export function useStatistics() {
     const [loading, setLoading] = useState(true);
     const [yearlyStats, setYearlyStats] = useState<YearlyStats | null>(null);
 
-    const calculateDuration = (startTime: string, endTime: string): number => {
+    const calculateDuration = (startTime: string, endTime: string, breakMinutes: number = 0): number => {
         const [startH, startM] = startTime.split(':').map(Number);
         const [endH, endM] = endTime.split(':').map(Number);
         let hours = endH - startH;
         let minutes = endM - startM;
         if (minutes < 0) { hours -= 1; minutes += 60; }
-        return hours + (minutes / 60);
+        const totalHours = hours + (minutes / 60);
+        const breakHours = Math.max(0, breakMinutes) / 60;
+        return Math.max(0, totalHours - breakHours);
     };
 
     const roundToNearest15 = (time: string): string => {
@@ -43,28 +46,59 @@ export function useStatistics() {
         return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
     };
 
-    const processAndSetYearlyStats = (shifts: any[]) => {
+    const calculateShiftEarningsForStats = (shift: any, holidaySet: Set<string>): number => {
+        const isHoliday = isHolidayDate(shift.date, holidaySet);
+        const breakMinutes = shift.break || 0;
+        const duration = calculateDuration(shift.start_time, shift.end_time, breakMinutes);
+        const hourlyRate = shift.hourly_rate || 0;
+        const extraPayment = shift.extra_payment || 0;
+
+
+        if (!isHoliday) {
+            return shift.earnings ?? ((duration * hourlyRate) + extraPayment);
+        }
+
+        const holidayCalculated = (duration * (hourlyRate * 2)) + extraPayment;
+        return holidayCalculated;
+    };
+
+    const processAndSetYearlyStats = (shifts: any[], holidaySet: Set<string>) => {
         const monthlyData: { [key: string]: MonthlyStat } = {};
 
         shifts.forEach(shift => {
             const month = shift.date.substring(0, 7);
-            const duration = calculateDuration(shift.start_time, shift.end_time);
+            const breakMinutes = shift.break || 0;
+            const duration = calculateDuration(shift.start_time, shift.end_time, breakMinutes);
+
+            const calculatedEarnings = calculateShiftEarningsForStats(shift, holidaySet);
 
             if (!monthlyData[month]) {
-                monthlyData[month] = { month: format(new Date(shift.date + 'T00:00:00'), 'MMM yyyy'), earnings: 0, hours: 0, shifts: 0, averagePerHour: 0 };
+                monthlyData[month] = {
+                    month: format(new Date(shift.date + 'T00:00:00'), 'MMM yyyy'),
+                    earnings: 0,
+                    hours: 0,
+                    shifts: 0,
+                    averagePerHour: 0
+                };
             }
-            monthlyData[month].earnings += shift.earnings;
+            monthlyData[month].earnings += calculatedEarnings;
             monthlyData[month].hours += duration;
             monthlyData[month].shifts += 1;
         });
 
-        const monthlyStats = Object.values(monthlyData).map(stat => ({ ...stat, averagePerHour: stat.hours > 0 ? stat.earnings / stat.hours : 0 }));
+        const monthlyStats = Object.values(monthlyData).map(stat => ({
+            ...stat,
+            averagePerHour: stat.hours > 0 ? stat.earnings / stat.hours : 0
+        }));
+
         const totalEarnings = monthlyStats.reduce((sum, stat) => sum + stat.earnings, 0);
         const totalHours = monthlyStats.reduce((sum, stat) => sum + stat.hours, 0);
         const totalShifts = monthlyStats.reduce((sum, stat) => sum + stat.shifts, 0);
 
         setYearlyStats({
-            totalEarnings, totalHours, totalShifts,
+            totalEarnings,
+            totalHours,
+            totalShifts,
             averagePerShift: totalShifts > 0 ? totalEarnings / totalShifts : 0,
             averagePerHour: totalHours > 0 ? totalEarnings / totalHours : 0,
             monthlyStats: monthlyStats.sort((a, b) => {
@@ -86,14 +120,17 @@ export function useStatistics() {
             const startDate = `${targetYear}-01-01`;
             const endDate = `${targetYear}-12-31`;
 
+            const holidaySet = await loadHolidayDateSet();
+
             const cachedAll = await getCachedShifts(user.id);
             const cachedShifts = cachedAll.filter(shift => shift.date >= startDate && shift.date <= endDate);
-            processAndSetYearlyStats(cachedShifts);
+
+            processAndSetYearlyStats(cachedShifts, holidaySet);
             setLoading(false);
 
             const bgPromise = getAllShiftsOfflineAware(user.id).then(({ shifts }) => {
                 const serverShifts = shifts.filter((shift: any) => shift.date >= startDate && shift.date <= endDate);
-                processAndSetYearlyStats(serverShifts);
+                processAndSetYearlyStats(serverShifts, holidaySet);
             }).catch(() => {});
 
             if (isRefresh) await bgPromise;
@@ -108,11 +145,29 @@ export function useStatistics() {
         if (!user?.id) throw new Error('Пользователь не авторизован');
         const start = format(startOfMonth(date), 'yyyy-MM-dd');
         const end = format(endOfMonth(date), 'yyyy-MM-dd');
-        const allShifts = await getCachedShifts(user.id);
+
+        const [allShifts, holidaySet] = await Promise.all([
+            getCachedShifts(user.id),
+            loadHolidayDateSet()
+        ]);
+
         const shifts = allShifts.filter(shift => shift.date >= start && shift.date <= end);
-        const earnings = shifts.reduce((sum, shift) => sum + shift.earnings, 0);
-        const hours = shifts.reduce((sum, shift) => sum + calculateDuration(shift.start_time, shift.end_time), 0);
-        return { month: format(date, 'MMM yyyy'), earnings, hours, shifts: shifts.length, averagePerHour: hours > 0 ? earnings / hours : 0 };
+
+        const earnings = shifts.reduce((sum, shift) => {
+            return sum + calculateShiftEarningsForStats(shift, holidaySet);
+        }, 0);
+
+        const hours = shifts.reduce((sum, shift) => {
+            return sum + calculateDuration(shift.start_time, shift.end_time, shift.break || 0);
+        }, 0);
+
+        return {
+            month: format(date, 'MMM yyyy'),
+            earnings,
+            hours,
+            shifts: shifts.length,
+            averagePerHour: hours > 0 ? earnings / hours : 0
+        };
     }, [user?.id]);
 
     const getShiftStats = useCallback(async () => {
@@ -126,7 +181,7 @@ export function useStatistics() {
         const endTimeCounts: { [key: string]: number } = {};
 
         shifts.forEach(shift => {
-            totalDuration += calculateDuration(shift.start_time, shift.end_time);
+            totalDuration += calculateDuration(shift.start_time, shift.end_time, shift.break || 0);
             const rStart = roundToNearest15(shift.start_time);
             const rEnd = roundToNearest15(shift.end_time);
             startTimeCounts[rStart] = (startTimeCounts[rStart] || 0) + 1;

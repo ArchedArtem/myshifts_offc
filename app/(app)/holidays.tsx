@@ -48,6 +48,20 @@ export default function HolidaysScreen() {
     fetchHolidays();
   };
 
+  const formatHolidayDate = (dateStr: string) => {
+    try {
+      if (dateStr.length === 5) {
+        // Формат MM-DD (например "05-09")
+        const dummyDate = parseISO(`2000-${dateStr}`);
+        return format(dummyDate, 'd MMMM', { locale: ru });
+      }
+      // Формат YYYY-MM-DD (например "2026-05-10")
+      return format(parseISO(dateStr), 'd MMMM yyyy', { locale: ru });
+    } catch {
+      return dateStr;
+    }
+  };
+
   if (loading) {
     return (
         <View style={styles.loaderWrap}>
@@ -92,13 +106,13 @@ export default function HolidaysScreen() {
               holidays.map((holiday, index) => {
                 const isLast = index === holidays.length - 1;
                 return (
-                    <View key={holiday.date} style={[styles.row, isLast && styles.lastRow]}>
+                    <View key={`${holiday.date}-${index}`} style={[styles.row, isLast && styles.lastRow]}>
                       <View style={styles.iconWrap}>
                         <Ionicons name="star" size={18} color={Colors.primary} />
                       </View>
                       <View style={styles.textWrap}>
                         <Text style={styles.dateText}>
-                          {format(parseISO(holiday.date), 'd MMMM yyyy', { locale: ru })}
+                          {formatHolidayDate(holiday.date)}
                         </Text>
                         <Text style={styles.nameText}>{holiday.name}</Text>
                       </View>

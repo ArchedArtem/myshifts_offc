@@ -204,7 +204,15 @@ export default function ShiftEditScreen() {
         }, [user])
     );
 
-    const grossEarnings = useMemo(() => {
+    // Проверка, является ли выбранная дата праздником (поддерживает и YYYY-MM-DD, и MM-DD)
+    const isHolidayShift = useMemo(() => {
+        if (!formData.date) return false;
+        const monthDay = formData.date.slice(5);
+        return holidayDateSet.has(formData.date) || holidayDateSet.has(monthDay);
+    }, [formData.date, holidayDateSet]);
+
+    // Итоговый грязный заработок с учетом праздничного коэффициента (6-й параметр)
+    const finalGrossEarnings = useMemo(() => {
         if (!isValidTime(formData.startTime) || !isValidTime(formData.endTime)) {
             return 0;
         }
@@ -212,12 +220,37 @@ export default function ShiftEditScreen() {
         const hourlyRate = parseFloat(formData.hourlyRate) || 0;
         const extra = parseFloat(formData.extraPayment) || 0;
         const breakMinutes = Math.min(120, Math.max(0, parseInt(formData.breakMinutes || '0', 10) || 0));
-        return calculateEarnings(formData.startTime, formData.endTime, hourlyRate, extra, breakMinutes);
+        return calculateEarnings(
+            formData.startTime,
+            formData.endTime,
+            hourlyRate,
+            extra,
+            breakMinutes,
+            isHolidayShift
+        );
+    }, [formData.breakMinutes, formData.endTime, formData.extraPayment, formData.hourlyRate, formData.startTime, isHolidayShift]);
+
+    // Базовый заработок (для вычисления чисто разницы праздничной надбавки)
+    const baseGrossEarnings = useMemo(() => {
+        if (!isValidTime(formData.startTime) || !isValidTime(formData.endTime)) {
+            return 0;
+        }
+
+        const hourlyRate = parseFloat(formData.hourlyRate) || 0;
+        const extra = parseFloat(formData.extraPayment) || 0;
+        const breakMinutes = Math.min(120, Math.max(0, parseInt(formData.breakMinutes || '0', 10) || 0));
+        return calculateEarnings(
+            formData.startTime,
+            formData.endTime,
+            hourlyRate,
+            extra,
+            breakMinutes,
+            false
+        );
     }, [formData.breakMinutes, formData.endTime, formData.extraPayment, formData.hourlyRate, formData.startTime]);
 
-    const isHolidayShift = holidayDateSet.has(formData.date);
-    const holidayPremium = isHolidayShift ? grossEarnings : 0;
-    const totalWithHoliday = applyNdfl(grossEarnings + holidayPremium, includeNdfl);
+    const holidayBonus = isHolidayShift ? (finalGrossEarnings - baseGrossEarnings) : 0;
+    const totalWithHoliday = applyNdfl(finalGrossEarnings, includeNdfl);
 
     const handleSave = async () => {
         if (!formData.date || !formData.startTime || !formData.endTime || !formData.hourlyRate) {
@@ -254,7 +287,7 @@ export default function ShiftEditScreen() {
                 shiftId,
                 shiftData: {
                     ...shiftData,
-                    earnings: grossEarnings,
+                    earnings: finalGrossEarnings,
                 },
             });
 
@@ -460,7 +493,7 @@ export default function ShiftEditScreen() {
             <View style={styles.totalCard}>
                 <Text style={styles.totalLabel}>Итого за смену</Text>
                 <Text style={styles.totalValue}>
-                    {applyNdfl(grossEarnings, includeNdfl).toFixed(2)} ₽
+                    {applyNdfl(finalGrossEarnings, includeNdfl).toFixed(2)} ₽
                 </Text>
             </View>
 
@@ -468,7 +501,7 @@ export default function ShiftEditScreen() {
                 <View style={styles.holidayAlert}>
                     <Text style={styles.holidayAlertTitle}>🎉 Праздничный день: двойная ставка</Text>
                     <Text style={styles.holidayAlertText}>
-                        Доплата: +{holidayPremium.toFixed(2)} ₽
+                        Праздничная надбавка: +{holidayBonus.toFixed(2)} ₽
                     </Text>
                     <Text style={styles.holidayAlertTotal}>
                         Итого с учетом праздника: {totalWithHoliday.toFixed(2)} ₽

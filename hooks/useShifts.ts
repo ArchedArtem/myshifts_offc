@@ -4,6 +4,7 @@ import { calculateEarnings } from '@/utils/calculations';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { deleteShiftOfflineAware, getShiftsWithOffline, saveShiftOfflineAware, getCachedShifts } from '@/services/offlineShifts';
 import { useAuth } from '@/hooks/useAuth';
+import { loadHolidayDateSet, isHolidayDate } from '@/services/holidays';
 
 interface Shift {
     id: string;
@@ -63,7 +64,20 @@ export function useShifts(providedUserId?: string) {
         try {
             const resolvedUserId = providedUserId || user?.id;
             if (!resolvedUserId) throw new Error('Пользователь не авторизован');
-            const earnings = calculateEarnings(shiftData.start_time, shiftData.end_time, shiftData.hourly_rate, shiftData.extra_payment);
+
+            // Подгружаем праздники и проверяем дату (работает и для MM-DD, и для YYYY-MM-DD)
+            const holidaySet = await loadHolidayDateSet();
+            const isHoliday = isHolidayDate(shiftData.date, holidaySet);
+
+            const earnings = calculateEarnings(
+                shiftData.start_time,
+                shiftData.end_time,
+                shiftData.hourly_rate,
+                shiftData.extra_payment || 0,
+                shiftData.break || 0,
+                isHoliday
+            );
+
             const newShift = { ...shiftData, user_id: resolvedUserId, earnings };
             const result = await saveShiftOfflineAware({ userId: resolvedUserId, isEdit: false, shiftData: newShift });
             const cached = { id: result.shiftId, ...newShift, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Shift;
@@ -80,14 +94,20 @@ export function useShifts(providedUserId?: string) {
             const resolvedUserId = providedUserId || user?.id;
             if (!resolvedUserId) throw new Error('Пользователь не авторизован');
 
-            if (shiftData.start_time || shiftData.end_time || shiftData.hourly_rate || shiftData.extra_payment) {
-                const existingShift = shifts.find(s => s.id === id);
-                if (existingShift) {
-                    shiftData.earnings = calculateEarnings(
-                        shiftData.start_time || existingShift.start_time, shiftData.end_time || existingShift.end_time,
-                        shiftData.hourly_rate || existingShift.hourly_rate, shiftData.extra_payment ?? existingShift.extra_payment
-                    );
-                }
+            const existingShift = shifts.find(s => s.id === id);
+            if (existingShift) {
+                const targetDate = shiftData.date || existingShift.date;
+                const holidaySet = await loadHolidayDateSet();
+                const isHoliday = isHolidayDate(targetDate, holidaySet);
+
+                shiftData.earnings = calculateEarnings(
+                    shiftData.start_time || existingShift.start_time,
+                    shiftData.end_time || existingShift.end_time,
+                    shiftData.hourly_rate || existingShift.hourly_rate,
+                    shiftData.extra_payment ?? existingShift.extra_payment,
+                    shiftData.break ?? existingShift.break ?? 0,
+                    isHoliday
+                );
             }
             await saveShiftOfflineAware({ userId: resolvedUserId, isEdit: true, shiftId: id, shiftData: { ...shiftData, user_id: resolvedUserId } as any });
             setShifts(prev => prev.map(shift => shift.id === id ? { ...shift, ...shiftData } : shift));

@@ -31,7 +31,7 @@ import { BonusSettings, defaultBonusSettings, loadBonusSettings } from '@/servic
 import { loadCachedProfile, saveCachedProfile } from '@/services/profileCache';
 import { loadTaxSettings } from '@/services/taxSettings';
 import { useTheme } from '@/hooks/useTheme';
-import { loadHolidayDateSet } from '@/services/holidays';
+import { loadHolidayDateSet, isHolidayDate } from '@/services/holidays';
 
 const DEFAULT_ADVANCE_DAY = 26;
 const DEFAULT_SALARY_DAY = 11;
@@ -150,7 +150,10 @@ const getShiftEarnings = (shift: Shift, holidayDateSet: Set<string>, includeNdfl
       shift.break ?? 0
   );
 
-  const grossWithHoliday = holidayDateSet.has(shift.date) ? gross * 2 : gross;
+  // Используем isHolidayDate, чтобы корректно распознавать и "YYYY-MM-DD", и "MM-DD"
+  const isHoliday = isHolidayDate(shift.date, holidayDateSet);
+  const grossWithHoliday = isHoliday ? gross * 2 : gross;
+
   return applyNdfl(grossWithHoliday, includeNdfl);
 };
 
