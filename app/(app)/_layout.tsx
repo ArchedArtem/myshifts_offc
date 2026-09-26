@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Tabs, Redirect } from 'expo-router';
 import { Calendar, BarChart3, User, WifiOff } from 'lucide-react-native';
 import { View, Platform, StyleSheet, Text } from 'react-native';
+import * as Application from 'expo-application';
+
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
@@ -10,6 +12,9 @@ import { startShiftSyncEngine, stopShiftSyncEngine } from '@/services/offlineSyn
 import { syncPushTokenForUser } from '@/services/notifications';
 import { syncNextShiftWidgetForUser } from '@/services/androidWidget';
 import ModernLoader from '@/components/ModernLoader';
+import ForceUpdateModal from '@/components/ForceUpdateModal';
+import { compareVersions } from '@/utils/versionCheck';
+import { supabase } from '@/services/supabase/client';
 import * as Haptics from '@/utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import NetInfo from '@react-native-community/netinfo';
@@ -20,6 +25,53 @@ export default function AppLayout() {
     const insets = useSafeAreaInsets();
 
     const [isOffline, setIsOffline] = useState(false);
+    const [needsForceUpdate, setNeedsForceUpdate] = useState(false);
+    const [updateUrl, setUpdateUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        const checkAppVersion = async () => {
+            try {
+                // Нативно получаем версию приложения из iOS/Android
+                const currentVersion = Application.nativeApplicationVersion || '2.5.0';
+
+                const { data, error } = await supabase
+                    .from('remote_config')
+                    .select('min_version, update_url')
+                    .eq('id', 1)
+                    .single();
+
+                if (error) {
+                    console.log('Supabase Error:', error);
+                    return;
+                }
+
+                if (data) {
+                    if (data.update_url) {
+                        setUpdateUrl(data.update_url);
+                    }
+
+                    const minVer = data.min_version;
+
+                    // Логируем в консоль для отладки
+                    console.log(`[VersionCheck] App: "${currentVersion}", MinInDB: "${minVer}"`);
+
+                    if (minVer) {
+                        const result = compareVersions(currentVersion, minVer);
+                        // Если текущая версия СТРОГО МЕНЬШЕ минимальной
+                        if (result < 0) {
+                            setNeedsForceUpdate(true);
+                        } else {
+                            setNeedsForceUpdate(false);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('Error checking version:', e);
+            }
+        };
+
+        checkAppVersion();
+    }, []);
 
     useEffect(() => {
         const unsubscribe = NetInfo.addEventListener(state => {
@@ -104,6 +156,8 @@ export default function AppLayout() {
                 <Tabs.Screen name="admin-notifications" options={{ href: null }} />
                 <Tabs.Screen name="admin-push" options={{ href: null }} />
             </Tabs>
+
+            <ForceUpdateModal visible={needsForceUpdate} storeUrl={updateUrl} />
 
             {isOffline && (
                 <View style={{

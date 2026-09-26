@@ -168,14 +168,11 @@ export default function CalendarScreen() {
 
     const markedDates = useMemo(() => {
         const marked: Record<string, any> = {};
-        // Берем текущий отображаемый год (например, "2026")
         const currentYearStr = format(selectedDate, 'yyyy');
 
         holidayDateSet.forEach((holidayDate) => {
-            // Если дата без года ("05-09"), приводим ее к "2026-05-09"
-            // Если дата с годом ("2026-05-09"), оставляем как есть
             let dateKey = holidayDate;
-            if (holidayDate.length === 5) { // формат MM-DD
+            if (holidayDate.length === 5) {
                 dateKey = `${currentYearStr}-${holidayDate}`;
             }
 
@@ -225,7 +222,7 @@ export default function CalendarScreen() {
         };
 
         return marked;
-    }, [formattedDate, holidayDateSet, shifts, selectedDate]); // <- Не забудьте добавить selectedDate в зависимости!
+    }, [formattedDate, holidayDateSet, shifts, selectedDate]);
 
     const filteredShifts = shifts.filter((shift) => shift.date === formattedDate);
 
@@ -342,8 +339,6 @@ export default function CalendarScreen() {
 
     return (
         <View style={styles.background}>
-
-
             <FlatList
                 data={filteredShifts}
                 keyExtractor={(item) => item.id}
@@ -495,18 +490,6 @@ export default function CalendarScreen() {
                 </View>
             )}
 
-            <TouchableOpacity
-                style={styles.fab}
-                onPress={() =>
-                    router.push({
-                        pathname: '/(app)/shift-edit',
-                        params: { date: formattedDate },
-                    })
-                }
-            >
-                <Text style={styles.fabText}>+</Text>
-            </TouchableOpacity>
-
             <Modal
                 visible={!!selectedShift}
                 transparent
@@ -604,9 +587,8 @@ export default function CalendarScreen() {
                 </Pressable>
             </Modal>
 
-            <View style={styles.floatingButtonContainer}>
-                <SmartScannerButton />
-            </View>
+            {/* Вызываем наш универсальный FAB-компонент, передавая ему выбранную дату */}
+            <SmartScannerButton currentDate={formattedDate} />
         </View>
     );
 }
@@ -691,12 +673,6 @@ const createStyles = () => StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 8,
     },
-    floatingButtonContainer: {
-        position: 'absolute',
-        bottom: 24,
-        left: 20,
-        zIndex: 100,
-    },
     emptyContainer: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -762,28 +738,6 @@ const createStyles = () => StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: Colors.primary,
-    },
-    fab: {
-        position: 'absolute',
-        bottom: 24,
-        right: 20,
-        backgroundColor: Colors.primary,
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 5,
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-    },
-    fabText: {
-        color: Colors.onPrimary,
-        fontSize: 28,
-        fontWeight: '600',
-        marginTop: -2,
     },
     overlay: {
         flex: 1,
